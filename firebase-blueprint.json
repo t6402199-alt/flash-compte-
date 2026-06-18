@@ -1,0 +1,124 @@
+{
+  "entities": {
+    "Contact": {
+      "title": "Contact",
+      "description": "A contact in the system",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "phone": { "type": "string" },
+        "email": { "type": "string" },
+        "company": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "name", "phone", "email", "createdAt"]
+    },
+    "CampaignLog": {
+      "title": "CampaignLog",
+      "description": "An SMS or Email transactional campaign history",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "type": { "type": "string", "enum": ["SMS", "EMAIL"] },
+        "title": { "type": "string" },
+        "content": { "type": "string" },
+        "recipientsCount": { "type": "number" },
+        "cost": { "type": "number" },
+        "status": { "type": "string", "enum": ["Envoyé", "En attente", "Échoué"] },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "type", "title", "content", "recipientsCount", "cost", "status", "createdAt"]
+    },
+    "PaymentTransaction": {
+      "title": "PaymentTransaction",
+      "description": "A billing or payment transaction record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "amount": { "type": "number" },
+        "method": { "type": "string" },
+        "status": { "type": "string", "enum": ["Complété", "En attente"] },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "amount", "method", "status", "createdAt"]
+    },
+    "SimulatedTransfer": {
+      "title": "SimulatedTransfer",
+      "description": "A generated bank transfer simulation record available globally",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "version": { "type": "string", "enum": ["V1", "V2"] },
+        "lastName": { "type": "string" },
+        "firstName": { "type": "string" },
+        "country": { "type": "string" },
+        "phone": { "type": "string" },
+        "email": { "type": "string" },
+        "address": { "type": "string" },
+        "language": { "type": "string" },
+        "senderBank": { "type": "string" },
+        "amount": { "type": "number" },
+        "currency": { "type": "string" },
+        "startPercentage": { "type": "number" },
+        "stopPercentage": { "type": "number" },
+        "customMessage": { "type": "string" },
+        "emailAlert": { "type": "boolean" },
+        "smsAlert": { "type": "boolean" },
+        "codePin": { "type": "string" },
+        "generatedUrl": { "type": "string" },
+        "isBlocked": { "type": "boolean" },
+        "senderName": { "type": "string" },
+        "recipientName": { "type": "string" },
+        "recipientBank": { "type": "string" },
+        "recipientAccount": { "type": "string" },
+        "type": { "type": "string" },
+        "reference": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "status": { "type": "string", "enum": ["SUCCESS", "BLOCKED_OTP", "FRAUD_ALERT", "ACCOUNT_LOCKED"] },
+        "delaySeconds": { "type": "number" },
+        "otpCode": { "type": "string" },
+        "feePercent": { "type": "number" },
+        "isCompleted": { "type": "boolean" }
+      },
+      "required": [
+        "id", "version", "lastName", "firstName", "country", "phone", "email", "address", 
+        "language", "senderBank", "amount", "currency", "startPercentage", "stopPercentage", 
+        "customMessage", "emailAlert", "smsAlert", "codePin", "generatedUrl", "isBlocked", 
+        "senderName", "recipientName", "recipientBank", "recipientAccount", "type", 
+        "reference", "createdAt", "status", "delaySeconds", "otpCode", "feePercent", "isCompleted"
+      ]
+    },
+    "BalanceState": {
+      "title": "BalanceState",
+      "description": "Persisted operator main balance",
+      "type": "object",
+      "properties": {
+        "balance": { "type": "number" }
+      },
+      "required": ["balance"]
+    }
+  },
+  "firestore": {
+    "/contacts/{id}": {
+      "schema": "Contact",
+      "description": "User custom contacts"
+    },
+    "/campaigns/{id}": {
+      "schema": "CampaignLog",
+      "description": "Sms & email campaign histories"
+    },
+    "/transactions/{id}": {
+      "schema": "PaymentTransaction",
+      "description": "Operator topup transactions"
+    },
+    "/transfers/{id}": {
+      "schema": "SimulatedTransfer",
+      "description": "Globally shared and accessible transfer links"
+    },
+    "/system/balance": {
+      "schema": "BalanceState",
+      "description": "Global administration wallet balance state"
+    }
+  }
+}
