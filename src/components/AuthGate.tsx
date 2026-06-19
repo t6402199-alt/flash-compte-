@@ -19,7 +19,7 @@ import {
 import { auth, saveTransferToDb, getTransfersByEmailFromDb, findTransferByAnyField } from '../lib/firebase';
 import { SimulatedTransfer } from '../types';
 
-const getPublicOrigin = () => window.location.origin.replace('ais-dev-', 'ais-pre-');
+const getPublicOrigin = () => window.location.origin;
 
 interface AuthGateProps {
   onAdminAuthenticated: (user: any) => void;
@@ -27,6 +27,8 @@ interface AuthGateProps {
   onBeneficiaryAuthenticated: (transfer: SimulatedTransfer) => void;
   transfers: SimulatedTransfer[];
   onCreateToast: (msg: string) => void;
+  initialTab?: 'beneficiary' | 'admin';
+  onBackToHome?: () => void;
 }
 
 export default function AuthGate({ 
@@ -34,9 +36,16 @@ export default function AuthGate({
   onBypassAdmin, 
   onBeneficiaryAuthenticated, 
   transfers,
-  onCreateToast
+  onCreateToast,
+  initialTab = 'beneficiary',
+  onBackToHome
 }: AuthGateProps) {
-  const [activeTab, setActiveTab] = useState<'beneficiary' | 'admin'>('beneficiary');
+  const [activeTab, setActiveTab] = useState<'beneficiary' | 'admin'>(initialTab);
+
+  // Sync state if initialTab prop changes
+  React.useEffect(() => {
+    setActiveTab(initialTab);
+  }, [initialTab]);
 
   // Check URL query parameters for admin bypass on mount
   React.useEffect(() => {
@@ -83,6 +92,7 @@ export default function AuthGate({
       // 1. Find locally
       let match = transfers.find(t => {
         const idMatch = t.id.toLowerCase() === benId.trim().toLowerCase() ||
+                        t.id.toLowerCase().replace('tx-', '') === benId.trim().toLowerCase() ||
                         `tx-${t.id.toLowerCase()}` === benId.trim().toLowerCase();
         const emailMatch = t.email.trim().toLowerCase() === benId.trim().toLowerCase();
         const refMatch = t.reference?.toLowerCase() === benId.trim().toLowerCase();
@@ -261,6 +271,17 @@ export default function AuthGate({
       {/* Main card wrapper container styled exactly like Photo 2 */}
       <div className="w-full max-w-md bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 shadow-xl relative overflow-hidden animate-scale-up">
         
+        {onBackToHome && (
+          <button
+            onClick={onBackToHome}
+            type="button"
+            className="absolute top-5 right-5 p-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-full text-slate-400 hover:text-slate-700 cursor-pointer transition select-none z-10"
+            title="Retour à l'accueil du site"
+          >
+            <span className="text-[11px] font-bold px-1.5 py-0.5">✕</span>
+          </button>
+        )}
+
         {/* Brand Header & Logo from Photo 2 */}
         <div className="flex flex-col items-center mb-6">
           <div 
@@ -455,6 +476,26 @@ export default function AuthGate({
                 </button>
               </form>
             )}
+
+            {/* Accès rapide Espace Administration visible */}
+            <div className="pt-5 border-t border-slate-100 text-center mt-4">
+              <button 
+                type="button" 
+                onClick={() => setActiveTab('admin')} 
+                className="text-xs text-slate-500 hover:text-blue-600 font-bold transition flex items-center justify-center gap-1.5 mx-auto cursor-pointer select-none"
+              >
+                ⚙️ Accéder à l'Espace Administration / Opérateur
+              </button>
+              {onBackToHome && (
+                <button 
+                  type="button" 
+                  onClick={onBackToHome} 
+                  className="text-[11px] text-slate-400 hover:text-emerald-600 font-semibold transition flex items-center justify-center gap-1.5 mx-auto cursor-pointer select-none mt-2.5"
+                >
+                  🏠 Retourner à la page d'accueil du site
+                </button>
+              )}
+            </div>
           </div>
         )}
 
@@ -563,6 +604,15 @@ export default function AuthGate({
               >
                 ← Retour à l'Espace Client
               </button>
+              {onBackToHome && (
+                <button 
+                  type="button" 
+                  onClick={onBackToHome} 
+                  className="text-[11px] text-slate-400 hover:text-emerald-600 font-semibold transition flex items-center justify-center gap-1.5 mx-auto cursor-pointer select-none mt-2"
+                >
+                  🏠 Retourner à la page d'accueil du site
+                </button>
+              )}
             </div>
 
             {/* Quick Demo Access Bypass Button */}

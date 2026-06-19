@@ -24,7 +24,7 @@ import { Contact, CampaignLog, PaymentTransaction, SimulatedTransfer } from '../
 import firebaseConfig from '../../firebase-applet-config.json';
 
 const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+export const db = (firebaseConfig as any).firestoreDatabaseId ? getFirestore(app, (firebaseConfig as any).firestoreDatabaseId) : getFirestore(app);
 export const auth = getAuth(app);
 
 // COLLECTIONS DEFINITION
@@ -84,12 +84,27 @@ export async function deleteTransferFromDb(id: string): Promise<void> {
 
 export async function getTransfersByEmailFromDb(email: string): Promise<SimulatedTransfer[]> {
   try {
-    const q = query(collection(db, TRANSFERS_COL), where("email", "==", email.trim().toLowerCase()));
-    const querySnapshot = await getDocs(q);
+    const cleanEmail = email.trim();
+    const emailsToTry = Array.from(new Set([
+      cleanEmail.toLowerCase(),
+      cleanEmail,
+      cleanEmail.toUpperCase()
+    ]));
+
     const items: SimulatedTransfer[] = [];
-    querySnapshot.forEach((doc) => {
-      items.push({ id: doc.id, ...doc.data() } as SimulatedTransfer);
-    });
+    const seenIds = new Set<string>();
+
+    for (const em of emailsToTry) {
+      const q = query(collection(db, TRANSFERS_COL), where("email", "==", em));
+      const querySnapshot = await getDocs(q);
+      querySnapshot.forEach((doc) => {
+        if (!seenIds.has(doc.id)) {
+          seenIds.add(doc.id);
+          items.push({ id: doc.id, ...doc.data() } as SimulatedTransfer);
+        }
+      });
+    }
+
     return items;
   } catch (error) {
     console.error("Error querying transfers by email:", error);
@@ -123,16 +138,25 @@ export async function findTransferByAnyField(searchStr: string): Promise<Simulat
     console.warn("Query by PIN non-fatal warning:", err);
   }
 
-  // 4. Try querying Firestore by email
-  try {
-    const qEmail = query(collection(db, TRANSFERS_COL), where("email", "==", cleanStr.toLowerCase()));
-    const emailSnapshot = await getDocs(qEmail);
-    if (!emailSnapshot.empty) {
-      const firstDoc = emailSnapshot.docs[0];
-      return { id: firstDoc.id, ...firstDoc.data() } as SimulatedTransfer;
+  // 4. Try querying Firestore by email with resilient casing fallbacks
+  const emailsToTry = Array.from(new Set([
+    cleanStr.toLowerCase(),
+    cleanStr,
+    cleanStr.toUpperCase(),
+    cleanStr.charAt(0).toUpperCase() + cleanStr.slice(1)
+  ]));
+
+  for (const em of emailsToTry) {
+    try {
+      const qEmail = query(collection(db, TRANSFERS_COL), where("email", "==", em));
+      const emailSnapshot = await getDocs(qEmail);
+      if (!emailSnapshot.empty) {
+        const firstDoc = emailSnapshot.docs[0];
+        return { id: firstDoc.id, ...firstDoc.data() } as SimulatedTransfer;
+      }
+    } catch (err) {
+      console.warn(`Query by email option (${em}) non-fatal warning:`, err);
     }
-  } catch (err) {
-    console.warn("Query by email non-fatal warning:", err);
   }
 
   return null;

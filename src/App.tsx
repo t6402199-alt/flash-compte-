@@ -20,6 +20,7 @@ import FlashCompteV2 from './components/FlashCompteV2';
 import HistoryPanel from './components/HistoryPanel';
 import SimulatedBankPortal from './components/SimulatedBankPortal';
 import AuthGate from './components/AuthGate';
+import LandingPage from './components/LandingPage';
 import { Contact, CampaignLog, PaymentTransaction, SimulatedTransfer } from './types';
 import { 
   getTransfersFromDb, 
@@ -43,13 +44,19 @@ import {
 import { onSnapshot, collection, doc } from 'firebase/firestore';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 
-const getPublicOrigin = () => window.location.origin.replace('ais-dev-', 'ais-pre-');
+const getPublicOrigin = () => window.location.origin;
 
 export default function App() {
   // Navigation & Screen Controller
   const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [liveSimulationTx, setLiveSimulationTx] = useState<SimulatedTransfer | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [showLandingPage, setShowLandingPage] = useState<boolean>(() => {
+    const searchParams = new URLSearchParams(window.location.search);
+    const hasClientQuery = searchParams.get('sid') || searchParams.get('c') || searchParams.get('portal');
+    return !hasClientQuery;
+  });
+  const [authGateTab, setAuthGateTab] = useState<'beneficiary' | 'admin'>('beneficiary');
   
   // Modals
   const [quickTrialModal, setQuickTrialModal] = useState(false);
@@ -73,6 +80,7 @@ export default function App() {
       clearTimeout(forceTimer);
       setCurrentUser(user);
       if (user) {
+        setShowLandingPage(false);
         const savedRole = localStorage.getItem('user_role') as 'admin' | 'client' | null;
         if (savedRole === 'client') {
           setUserRole('client');
@@ -313,8 +321,6 @@ export default function App() {
             isCompleted: false,
             generatedUrl: `${getPublicOrigin()}/?sid=${cParam}&connect=successful`
           };
-          // Persist the newly pre-seeded item immediately to Cloud DB
-          await saveTransferToDb(match);
         }
 
         if (match) {
@@ -358,6 +364,7 @@ export default function App() {
       localStorage.removeItem('user_role');
       setBypassAdmin(false);
       setLiveSimulationTx(null);
+      setShowLandingPage(true);
       onCreateToast("Déconnexion réussie !");
     } catch (error: any) {
       console.error("Standard error signing out: ", error);
@@ -614,21 +621,41 @@ export default function App() {
   const isAuthenticated = isOperatorAuthenticated || isClientAuthenticated;
   
   if (!isAuthenticated) {
-    // Otherwise show login options
+    if (showLandingPage) {
+      return (
+        <LandingPage 
+          onEnterAdminDemo={() => {
+            setBypassAdmin(true);
+            setShowLandingPage(false);
+          }}
+          onOpenAuthGate={(tab) => {
+            setAuthGateTab(tab);
+            setShowLandingPage(false);
+          }}
+          transfersCount={transfers.length}
+        />
+      );
+    }
+
     return (
       <AuthGate 
+        initialTab={authGateTab}
+        onBackToHome={() => setShowLandingPage(true)}
         onAdminAuthenticated={(user) => {
           setCurrentUser(user);
           setUserRole('admin');
           localStorage.setItem('user_role', 'admin');
+          setShowLandingPage(false);
         }}
         onBypassAdmin={() => {
           setBypassAdmin(true);
+          setShowLandingPage(false);
         }}
         onBeneficiaryAuthenticated={(transfer) => {
           setUserRole('client');
           localStorage.setItem('user_role', 'client');
           setLiveSimulationTx(transfer);
+          setShowLandingPage(false);
         }}
         transfers={transfers}
         onCreateToast={onCreateToast}
@@ -790,6 +817,8 @@ export default function App() {
               onClearAllTransfers={onClearAllTransfers}
               onLaunchSimulation={setLiveSimulationTx}
               onCreateToast={onCreateToast}
+              onSetBlockedState={onSetBlockedState}
+              onUpdatePercentages={onUpdatePercentages}
             />
           )}
 

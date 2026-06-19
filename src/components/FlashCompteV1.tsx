@@ -146,7 +146,7 @@ export default function FlashCompteV1({
       firstName: firstName.trim(),
       country,
       phone: phone.trim(),
-      email: email.trim(),
+      email: email.trim().toLowerCase(),
       address: address.trim(),
       language,
       senderBank: mappedBank,

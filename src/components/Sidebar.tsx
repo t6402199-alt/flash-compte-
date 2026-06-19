@@ -38,7 +38,7 @@ export default function Sidebar({
     { id: 'billing', label: 'Rechargement Solde', icon: CreditCard, category: 'FINANCES' },
     { id: 'flash-v1', label: 'Flash Compte V1', icon: Zap, category: 'SIMULATION ESSAIS' },
     { id: 'flash-v2', label: 'Flash Compte V2 (Smart)', icon: ShieldAlert, category: 'SIMULATION ESSAIS' },
-    { id: 'history', label: 'Suivi des Essais', icon: History, category: 'SIMULATION ESSAIS' },
+    { id: 'history', label: 'Historique Comptes Flash', icon: History, category: 'SIMULATION ESSAIS' },
   ];
 
   const categories = Array.from(new Set(menuItems.map(item => item.category)));
