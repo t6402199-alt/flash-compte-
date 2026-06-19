@@ -19,6 +19,8 @@ import {
 import { auth, saveTransferToDb, getTransfersByEmailFromDb, findTransferByAnyField } from '../lib/firebase';
 import { SimulatedTransfer } from '../types';
 
+const getPublicOrigin = () => window.location.origin.replace('ais-dev-', 'ais-pre-');
+
 interface AuthGateProps {
   onAdminAuthenticated: (user: any) => void;
   onBypassAdmin: () => void;
@@ -177,7 +179,7 @@ export default function AuthGate({
           otpCode: '',
           feePercent: 1.2,
           isCompleted: false,
-          generatedUrl: `${window.location.origin}/?c=${seededId}`
+          generatedUrl: `${getPublicOrigin()}/?c=${seededId}`
         };
         // Persist to DB directly using saveTransferToDb
         await saveTransferToDb(match);
@@ -293,14 +295,46 @@ export default function AuthGate({
 
         {/* Tab 1: Beneficiary Access */}
         {activeTab === 'beneficiary' && (
-          <div className="space-y-5 text-center">
+          <div className="space-y-4 text-center">
             
             <h3 className="text-lg font-black text-slate-900 mb-1 font-sans">Connexion à votre compte</h3>
             
             {/* User profile capsule banner row as on Photo 2 */}
-            <div className="my-4 inline-flex items-center gap-2 px-5 py-2 bg-slate-100 border border-slate-200 rounded-lg text-xs font-bold text-slate-600 select-none shadow-sm uppercase tracking-wide">
+            <div className="my-2 inline-flex items-center gap-2 px-5 py-2 bg-slate-100 border border-slate-200 rounded-lg text-xs font-bold text-slate-600 select-none shadow-sm uppercase tracking-wide">
               <User className="text-slate-500" size={13} />
               ACCÈS CONFORMITÉ CLIENT
+            </div>
+
+            {/* Auth switcher for client between PIN and Firebase */}
+            <div className="grid grid-cols-2 p-1 bg-slate-100/85 border border-slate-200/80 rounded-xl text-xs font-bold font-sans">
+              <button
+                type="button"
+                onClick={() => {
+                  setBenAuthMode('pin');
+                  setBenError(null);
+                }}
+                className={`py-2 rounded-lg cursor-pointer transition-all duration-200 ${
+                  benAuthMode === 'pin'
+                    ? 'bg-white text-blue-600 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                Accès code PIN / ID
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setBenAuthMode('firebase');
+                  setBenError(null);
+                }}
+                className={`py-2 rounded-lg cursor-pointer transition-all duration-200 ${
+                  benAuthMode === 'firebase'
+                    ? 'bg-white text-blue-600 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                🔐 Compte Firebase (E-mail)
+              </button>
             </div>
 
             {benError && (
@@ -309,52 +343,118 @@ export default function AuthGate({
               </div>
             )}
 
-            <form onSubmit={handleBeneficiarySubmit} className="space-y-4 text-left">
-              {/* E-mail Input block (No labels, empty placeholder code, gray icon) */}
-              <div className="flex border border-slate-200 rounded-xl overflow-hidden focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500/50 transition bg-white shadow-sm">
-                <div className="bg-slate-50 border-r border-slate-200 px-4 py-3.5 flex items-center justify-center text-slate-400 shrink-0 select-none">
-                  <Mail size={15} />
+            {benAuthMode === 'pin' ? (
+              <form onSubmit={handleBeneficiarySubmit} className="space-y-4 text-left">
+                {/* E-mail Input block (No labels, empty placeholder code, gray icon) */}
+                <div className="flex border border-slate-200 rounded-xl overflow-hidden focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500/50 transition bg-white shadow-sm">
+                  <div className="bg-slate-50 border-r border-slate-200 px-4 py-3.5 flex items-center justify-center text-slate-400 shrink-0 select-none">
+                    <Mail size={15} />
+                  </div>
+                  <input
+                    type="text"
+                    required
+                    value={benId}
+                    onChange={(e) => setBenId(e.target.value)}
+                    className="w-full bg-white px-4 py-3.5 text-xs sm:text-sm text-slate-800 font-medium focus:outline-none"
+                    placeholder="Adresse e-mail, téléphone ou ID dossier"
+                  />
                 </div>
-                <input
-                  type="text"
-                  required
-                  value={benId}
-                  onChange={(e) => setBenId(e.target.value)}
-                  className="w-full bg-white px-4 py-3.5 text-xs sm:text-sm text-slate-800 font-medium focus:outline-none"
-                  placeholder=""
-                />
-              </div>
 
-              {/* PIN Access Code block (No labels, empty placeholder, dual-colored layout) */}
-              <div className="relative flex border border-slate-200 rounded-xl overflow-hidden focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500/50 transition bg-white shadow-sm">
-                <div className="bg-slate-50 border-r border-slate-200 px-4 flex items-center justify-center text-slate-400 shrink-0 select-none">
-                  <Lock size={15} />
+                {/* PIN Access Code block (No labels, empty placeholder, dual-colored layout) */}
+                <div className="relative flex border border-slate-200 rounded-xl overflow-hidden focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500/50 transition bg-white shadow-sm">
+                  <div className="bg-slate-50 border-r border-slate-200 px-4 flex items-center justify-center text-slate-400 shrink-0 select-none">
+                    <Lock size={15} />
+                  </div>
+                  <input
+                    type={benShowPin ? "text" : "password"}
+                    required
+                    value={benPin}
+                    onChange={(e) => setBenPin(e.target.value)}
+                    className="w-full bg-white px-4 py-3.5 text-xs sm:text-sm text-slate-800 font-mono font-bold tracking-widest focus:outline-none"
+                    placeholder="Code PIN de connexion"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setBenShowPin(!benShowPin)}
+                    className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-650 cursor-pointer"
+                  >
+                    {benShowPin ? <EyeOff size={14} /> : <Eye size={14} />}
+                  </button>
                 </div>
-                <input
-                  type={benShowPin ? "text" : "password"}
-                  required
-                  value={benPin}
-                  onChange={(e) => setBenPin(e.target.value)}
-                  className="w-full bg-white px-4 py-3.5 text-xs sm:text-sm text-slate-800 font-mono font-bold tracking-widest focus:outline-none"
-                  placeholder=""
-                />
+
                 <button
-                  type="button"
-                  onClick={() => setBenShowPin(!benShowPin)}
-                  className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-650 cursor-pointer"
+                  type="submit"
+                  disabled={benLoading}
+                  className="w-full py-4 bg-blue-600 hover:bg-blue-750 disabled:opacity-50 text-white font-bold rounded-xl text-xs sm:text-sm cursor-pointer shadow-md active:scale-95 transition-all text-center flex items-center justify-center gap-1 font-semibold uppercase tracking-wide"
                 >
-                  {benShowPin ? <EyeOff size={14} /> : <Eye size={14} />}
+                  {benLoading ? "Connexion..." : "se connecter"}
                 </button>
-              </div>
+              </form>
+            ) : (
+              <form onSubmit={handleBeneficiaryFirebaseSubmit} className="space-y-4 text-left">
+                {/* Firebase Email Input block */}
+                <div className="flex border border-slate-200 rounded-xl overflow-hidden focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500/50 transition bg-white shadow-sm">
+                  <div className="bg-slate-50 border-r border-slate-200 px-4 py-3.5 flex items-center justify-center text-slate-400 shrink-0 select-none">
+                    <Mail size={15} />
+                  </div>
+                  <input
+                    type="email"
+                    required
+                    value={benEmail}
+                    onChange={(e) => setBenEmail(e.target.value)}
+                    className="w-full bg-white px-4 py-3.5 text-xs sm:text-sm text-slate-800 font-medium focus:outline-none"
+                    placeholder="Adresse e-mail du client"
+                  />
+                </div>
 
-              <button
-                type="submit"
-                disabled={benLoading}
-                className="w-full py-4 bg-blue-600 hover:bg-blue-750 disabled:opacity-50 text-white font-bold rounded-xl text-xs sm:text-sm cursor-pointer shadow-md active:scale-95 transition-all text-center flex items-center justify-center gap-1 font-semibold uppercase tracking-wide"
-              >
-                {benLoading ? "Connexion..." : "se connecter"}
-              </button>
-            </form>
+                {/* Firebase Password block */}
+                <div className="relative flex border border-slate-200 rounded-xl overflow-hidden focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500/50 transition bg-white shadow-sm">
+                  <div className="bg-slate-50 border-r border-slate-200 px-4 flex items-center justify-center text-slate-400 shrink-0 select-none">
+                    <Lock size={15} />
+                  </div>
+                  <input
+                    type={benShowPassword ? "text" : "password"}
+                    required
+                    value={benPassword}
+                    onChange={(e) => setBenPassword(e.target.value)}
+                    className="w-full bg-white px-4 py-3.5 text-xs sm:text-sm text-slate-800 font-medium focus:outline-none"
+                    placeholder="Mot de passe du compte"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setBenShowPassword(!benShowPassword)}
+                    className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-650 cursor-pointer"
+                  >
+                    {benShowPassword ? <EyeOff size={14} /> : <Eye size={14} />}
+                  </button>
+                </div>
+
+                {/* Firebase Switch signin/signup */}
+                <div className="flex items-center justify-between text-[11px] pt-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setBenFirebaseMode(benFirebaseMode === 'signin' ? 'signup' : 'signin');
+                      setBenError(null);
+                    }}
+                    className="text-blue-600 hover:text-blue-700 font-bold transition hover:underline bg-transparent border-none p-0 cursor-pointer"
+                  >
+                    {benFirebaseMode === 'signin' 
+                      ? "Nouveau ? Créer un compte client" 
+                      : "Déjà inscrit ? Se connecter"}
+                  </button>
+                  <span className="text-slate-400 font-mono">Firebase Securisé</span>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={benLoading}
+                  className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold rounded-xl text-xs sm:text-sm cursor-pointer shadow-md active:scale-95 transition-all text-center flex items-center justify-center gap-1 font-semibold uppercase tracking-wide"
+                >
+                  {benLoading ? "Traitement..." : (benFirebaseMode === 'signin' ? "connexion sécurisée" : "créer mon compte sécurisé")}
+                </button>
+              </form>
+            )}
           </div>
         )}
 
