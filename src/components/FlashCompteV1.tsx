@@ -417,6 +417,9 @@ export default function FlashCompteV1({
                         <option value="FCFA (XAF)">FCFA XAF (F.CFA)</option>
                         <option value="EUR (€)">EUR (€)</option>
                         <option value="USD ($)">USD ($)</option>
+                        <option value="RON (lei)">RON (lei) - Leu</option>
+                        <option value="BRL (R$)">BRL (R$) - Real brésilien</option>
+                        <option value="HUF (Ft)">HUF (Ft) - Forint hongrois</option>
                       </select>
                     </div>
                   </div>

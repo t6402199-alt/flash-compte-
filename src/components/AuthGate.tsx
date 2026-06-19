@@ -35,6 +35,14 @@ export default function AuthGate({
   onCreateToast
 }: AuthGateProps) {
   const [activeTab, setActiveTab] = useState<'beneficiary' | 'admin'>('beneficiary');
+
+  // Check URL query parameters for admin bypass on mount
+  React.useEffect(() => {
+    const searchParams = new URLSearchParams(window.location.search);
+    if (searchParams.get('admin') === 'true') {
+      setActiveTab('admin');
+    }
+  }, []);
   
   // Beneficiary form state
   const [benAuthMode, setBenAuthMode] = useState<'pin' | 'firebase'>('pin');
@@ -246,359 +254,229 @@ export default function AuthGate({
   };
 
   return (
-    <div className="min-h-screen w-full bg-slate-950 flex flex-col items-center justify-center p-4 sm:p-6 lg:p-8 antialiased selection:bg-blue-600 selection:text-white">
+    <div className="min-h-screen w-full bg-slate-50 flex flex-col items-center justify-center p-4 sm:p-6 lg:p-8 antialiased selection:bg-blue-600 selection:text-white">
       
-      {/* Background radial spotlight and grids */}
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_60%_50%_at_50%_-10%,rgba(37,99,235,0.12),transparent)] pointer-events-none" />
-      <div className="absolute inset-0 bg-[linear-gradient(rgba(30,41,59,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(30,41,59,0.03)_1px,transparent_1px)] bg-[size:32px_32px] pointer-events-none" />
-
-      {/* Main card wrapper container */}
-      <div className="w-full max-w-lg bg-slate-900/80 border border-slate-800 rounded-3xl p-6 sm:p-8 relative shadow-2xl backdrop-blur-md overflow-hidden animate-scale-up">
+      {/* Main card wrapper container styled exactly like Photo 2 */}
+      <div className="w-full max-w-md bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 shadow-xl relative overflow-hidden animate-scale-up">
         
-        {/* Glow detail accents */}
-        <div className="absolute top-0 left-1/4 right-1/4 h-[2px] bg-gradient-to-r from-transparent via-blue-500 to-transparent" />
-        <div className="absolute -top-12 -left-12 w-28 h-28 bg-blue-500/10 rounded-full blur-2xl pointer-events-none" />
-        <div className="absolute -bottom-12 -right-12 w-28 h-28 bg-indigo-500/10 rounded-full blur-2xl pointer-events-none" />
-
-        {/* Brand Header */}
-        <div className="flex flex-col items-center text-center mb-6">
-          <div className="h-12 w-12 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center shadow-lg shadow-blue-500/20 mb-3 animate-pulse">
-            <Zap className="text-white fill-amber-300/30" size={24} />
+        {/* Brand Header & Logo from Photo 2 */}
+        <div className="flex flex-col items-center mb-6">
+          <div 
+            onClick={() => setActiveTab(activeTab === 'beneficiary' ? 'admin' : 'beneficiary')}
+            className="flex items-center justify-center gap-2 select-none font-sans cursor-pointer focus:outline-none"
+            title="TRANSFERWIRE"
+          >
+            <svg className="w-14 h-14 shrink-0" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="50" cy="18" r="4.5" fill="#10B981" />
+              <circle cx="64" cy="22" r="5" fill="#34D399" />
+              <circle cx="76" cy="32" r="5.5" fill="#059669" />
+              <circle cx="82" cy="46" r="6" fill="#3B82F6" />
+              <circle cx="80" cy="61" r="5.5" fill="#2563EB" />
+              <circle cx="72" cy="74" r="5" fill="#1D4ED8" />
+              <circle cx="59" cy="81" r="4.5" fill="#1E40AF" />
+              <circle cx="45" cy="81" r="4.5" fill="#0284C7" />
+              <circle cx="31" cy="74" r="5" fill="#0EA5E9" />
+              <circle cx="21" cy="62" r="5.5" fill="#38BDF8" />
+              <circle cx="18" cy="47" r="6" fill="#10B981" />
+              <circle cx="22" cy="33" r="5" fill="#6EE7B7" />
+              <circle cx="32" cy="22" r="4" fill="#A7F3D0" />
+              <circle cx="48" cy="42" r="6" fill="#059669" />
+              <circle cx="58" cy="46" r="5.5" fill="#10B981" />
+              <circle cx="62" cy="56" r="5" fill="#2563EB" />
+              <circle cx="54" cy="64" r="5.5" fill="#3B82F6" />
+              <circle cx="44" cy="61" r="6" fill="#0284C7" />
+              <circle cx="38" cy="51" r="5" fill="#34D399" />
+            </svg>
+            <span className="text-2xl font-black tracking-wider text-[#0F62FE]">TRANSFERWIRE</span>
           </div>
-          <h2 className="text-2xl font-bold font-display text-white tracking-tight">Portail de Connexion</h2>
-          <p className="text-xs text-slate-400 mt-1 max-w-sm">
-            Espace sécurisé FlashConnect. Veuillez choisir votre canal pour vous connecter.
-          </p>
-        </div>
-
-        {/* Tab Selector */}
-        <div className="grid grid-cols-2 bg-slate-950 border border-slate-800 rounded-2xl p-1 mb-6">
-          <button
-            onClick={() => {
-              setActiveTab('beneficiary');
-              setBenError(null);
-            }}
-            className={`py-2 px-3 rounded-xl text-xs sm:text-sm font-bold transition-all duration-200 flex items-center justify-center gap-1.5 cursor-pointer ${
-              activeTab === 'beneficiary' 
-                ? 'bg-slate-900 border border-slate-800 text-blue-400 font-medium' 
-                : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            <User size={15} />
-            Espace Bénéficiaire
-          </button>
-          
-          <button
-            onClick={() => {
-              setActiveTab('admin');
-              setAdminError(null);
-            }}
-            className={`py-2 px-3 rounded-xl text-xs sm:text-sm font-bold transition-all duration-200 flex items-center justify-center gap-1.5 cursor-pointer ${
-              activeTab === 'admin' 
-                ? 'bg-slate-900 border border-slate-800 text-blue-400 font-medium' 
-                : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            <ShieldAlert size={15} />
-            Administrateur (SaaS)
-          </button>
         </div>
 
         {/* Tab 1: Beneficiary Access */}
         {activeTab === 'beneficiary' && (
-          <div className="space-y-4">
+          <div className="space-y-5 text-center">
             
-            {/* Sub-tabs for Beneficiary login styles */}
-            <div className="flex bg-slate-950/60 p-1 rounded-xl border border-slate-800/80 mb-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setBenAuthMode('pin');
-                  setBenError(null);
-                }}
-                className={`flex-1 py-1.5 text-[11px] font-bold rounded-lg cursor-pointer transition ${
-                  benAuthMode === 'pin' 
-                    ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30' 
-                    : 'text-slate-500 hover:text-slate-300'
-                }`}
-              >
-                Accès Rapide PIN
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setBenAuthMode('firebase');
-                  setBenError(null);
-                }}
-                className={`flex-1 py-1.5 text-[11px] font-bold rounded-lg cursor-pointer transition flex items-center justify-center gap-1 ${
-                  benAuthMode === 'firebase' 
-                    ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30' 
-                    : 'text-slate-500 hover:text-slate-300'
-                }`}
-              >
-                <span>Espace client Firebase</span>
-                <span className="bg-blue-500/20 text-[8px] px-1 rounded text-blue-300">Nouveau</span>
-              </button>
+            <h3 className="text-lg font-black text-slate-900 mb-1 font-sans">Connexion à votre compte</h3>
+            
+            {/* User profile capsule banner row as on Photo 2 */}
+            <div className="my-4 inline-flex items-center gap-2 px-5 py-2 bg-slate-100 border border-slate-200 rounded-lg text-xs font-bold text-slate-600 select-none shadow-sm uppercase tracking-wide">
+              <User className="text-slate-500" size={13} />
+              ACCÈS CONFORMITÉ CLIENT
             </div>
 
             {benError && (
-              <div className="bg-red-950/40 border border-red-900/30 rounded-2xl p-3.5 flex items-start gap-2 text-xs text-red-400 leading-relaxed">
+              <div className="bg-rose-50 border border-rose-200 rounded-xl p-3.5 text-left text-xs font-semibold text-rose-600 leading-relaxed">
                 <span>⚠️ {benError}</span>
               </div>
             )}
 
-            {benAuthMode === 'pin' ? (
-              <form onSubmit={handleBeneficiarySubmit} className="space-y-4">
-                <div className="space-y-1.5">
-                  <label className="text-xs text-slate-400 font-mono tracking-wider font-semibold uppercase block">
-                    Identifiant Généré <span className="text-red-500">*</span>
-                  </label>
-                  <div className="relative">
-                    <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-500 pointer-events-none">
-                      <Mail size={15} />
-                    </span>
-                    <input
-                      type="text"
-                      required
-                      value={benId}
-                      onChange={(e) => setBenId(e.target.value)}
-                      placeholder="Ex: Votre Email ou Référence (ex: TRW-...)"
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-4 py-3 text-xs text-white focus:outline-none focus:border-blue-500 transition font-medium"
-                    />
-                  </div>
-                  <p className="text-[10px] text-slate-500 font-medium">
-                    Saisissez l'e-mail indiqué lors de la création du virement ou votre référence unique.
-                  </p>
+            <form onSubmit={handleBeneficiarySubmit} className="space-y-4 text-left">
+              {/* E-mail Input block (No labels, empty placeholder code, gray icon) */}
+              <div className="flex border border-slate-200 rounded-xl overflow-hidden focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500/50 transition bg-white shadow-sm">
+                <div className="bg-slate-50 border-r border-slate-200 px-4 py-3.5 flex items-center justify-center text-slate-400 shrink-0 select-none">
+                  <Mail size={15} />
                 </div>
+                <input
+                  type="text"
+                  required
+                  value={benId}
+                  onChange={(e) => setBenId(e.target.value)}
+                  className="w-full bg-white px-4 py-3.5 text-xs sm:text-sm text-slate-800 font-medium focus:outline-none"
+                  placeholder=""
+                />
+              </div>
 
-                <div className="space-y-1.5">
-                  <label className="text-xs text-slate-400 font-mono tracking-wider font-semibold uppercase block">
-                    Code PIN du Virement <span className="text-red-500">*</span>
-                  </label>
-                  <div className="relative">
-                    <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-500 pointer-events-none">
-                      <Key size={15} />
-                    </span>
-                    <input
-                      type={benShowPin ? "text" : "password"}
-                      required
-                      value={benPin}
-                      onChange={(e) => setBenPin(e.target.value)}
-                      placeholder="Saisissez votre code PIN (ex : 6 chiffres)"
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-10 py-3 text-xs font-mono font-bold tracking-widest text-emerald-400 focus:outline-none focus:border-blue-500 transition"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setBenShowPin(!benShowPin)}
-                      className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-500 hover:text-white cursor-pointer"
-                    >
-                      {benShowPin ? <EyeOff size={15} /> : <Eye size={15} />}
-                    </button>
-                  </div>
-                  <p className="text-[10px] text-slate-500 font-medium">
-                    Le mot de passe de déverrouillage de virement émis par votre gestionnaire.
-                  </p>
+              {/* PIN Access Code block (No labels, empty placeholder, dual-colored layout) */}
+              <div className="relative flex border border-slate-200 rounded-xl overflow-hidden focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500/50 transition bg-white shadow-sm">
+                <div className="bg-slate-50 border-r border-slate-200 px-4 flex items-center justify-center text-slate-400 shrink-0 select-none">
+                  <Lock size={15} />
                 </div>
-
+                <input
+                  type={benShowPin ? "text" : "password"}
+                  required
+                  value={benPin}
+                  onChange={(e) => setBenPin(e.target.value)}
+                  className="w-full bg-white px-4 py-3.5 text-xs sm:text-sm text-slate-800 font-mono font-bold tracking-widest focus:outline-none"
+                  placeholder=""
+                />
                 <button
-                  type="submit"
-                  disabled={benLoading}
-                  className="w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:opacity-50 text-white font-bold rounded-2xl text-xs uppercase cursor-pointer transition shadow-lg shadow-blue-500/10 flex items-center justify-center gap-1.5"
+                  type="button"
+                  onClick={() => setBenShowPin(!benShowPin)}
+                  className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-650 cursor-pointer"
                 >
-                  {benLoading ? "Validation en cours..." : "Valider mes accès de virement"}
-                  <ArrowRight size={14} />
+                  {benShowPin ? <EyeOff size={14} /> : <Eye size={14} />}
                 </button>
-              </form>
-            ) : (
-              <form onSubmit={handleBeneficiaryFirebaseSubmit} className="space-y-4">
-                <div className="space-y-1.5">
-                  <label className="text-xs text-slate-400 font-mono tracking-wider font-semibold uppercase block">
-                    Email Espace Client <span className="text-red-500">*</span>
-                  </label>
-                  <div className="relative">
-                    <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-500 pointer-events-none">
-                      <Mail size={15} />
-                    </span>
-                    <input
-                      type="email"
-                      required
-                      value={benEmail}
-                      onChange={(e) => setBenEmail(e.target.value)}
-                      placeholder="client@mail.com"
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-4 py-3 text-xs text-white focus:outline-none focus:border-blue-500 transition font-medium"
-                    />
-                  </div>
-                </div>
+              </div>
 
-                <div className="space-y-1.5">
-                  <label className="text-xs text-slate-400 font-mono tracking-wider font-semibold uppercase block">
-                    Mot de passe Firebase <span className="text-red-500">*</span>
-                  </label>
-                  <div className="relative">
-                    <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-500 pointer-events-none">
-                      <Lock size={15} />
-                    </span>
-                    <input
-                      type={benShowPassword ? "text" : "password"}
-                      required
-                      value={benPassword}
-                      onChange={(e) => setBenPassword(e.target.value)}
-                      placeholder="Saisissez un mot de passe (min. 6 car.)"
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-10 py-3 text-xs text-white focus:outline-none focus:border-blue-500 transition font-medium"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setBenShowPassword(!benShowPassword)}
-                      className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-500 hover:text-white cursor-pointer"
-                    >
-                      {benShowPassword ? <EyeOff size={15} /> : <Eye size={15} />}
-                    </button>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between text-[11px] pt-1">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setBenFirebaseMode(benFirebaseMode === 'signin' ? 'signup' : 'signin');
-                      setBenError(null);
-                    }}
-                    className="text-blue-400 hover:text-blue-300 font-bold transition hover:underline bg-transparent border-none p-0 cursor-pointer"
-                  >
-                    {benFirebaseMode === 'signin' 
-                      ? "Créer un compte client" 
-                      : "Déjà membre client ? Se connecter"}
-                  </button>
-                  <span className="text-slate-500 font-mono text-[10px]">Espace Client Firebase</span>
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={benLoading}
-                  className="w-full py-3 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold rounded-2xl text-xs uppercase cursor-pointer transition shadow-lg shadow-blue-500/10 flex items-center justify-center gap-1.5"
-                >
-                  {benLoading ? "Traitement Firebase..." : (
-                    benFirebaseMode === 'signin' ? "Connexion Espace Client" : "Créer mon Compte Client"
-                  )}
-                  <ArrowRight size={14} />
-                </button>
-              </form>
-            )}
+              <button
+                type="submit"
+                disabled={benLoading}
+                className="w-full py-4 bg-blue-600 hover:bg-blue-750 disabled:opacity-50 text-white font-bold rounded-xl text-xs sm:text-sm cursor-pointer shadow-md active:scale-95 transition-all text-center flex items-center justify-center gap-1 font-semibold uppercase tracking-wide"
+              >
+                {benLoading ? "Connexion..." : "se connecter"}
+              </button>
+            </form>
           </div>
         )}
 
         {/* Tab 2: SaaS Admin Access */}
         {activeTab === 'admin' && (
-          <form onSubmit={handleAdminSubmit} className="space-y-4">
+          <div className="space-y-4">
             
+            <div className="text-center">
+              <h3 className="text-lg font-black text-slate-900 mb-1">Administration Opérateur</h3>
+              <p className="text-[11px] text-slate-500">Accès réservé aux gestionnaires de conformité</p>
+            </div>
+
             {adminError && (
-              <div className="bg-red-950/40 border border-red-905/30 rounded-2xl p-3.5 text-xs text-red-400">
+              <div className="bg-rose-50 border border-rose-200 rounded-xl p-3 text-xs text-rose-600">
                 ⚠️ {adminError}
               </div>
             )}
 
             {adminSuccess && (
-              <div className="bg-emerald-950/40 border border-emerald-905/30 rounded-2xl p-3.5 text-xs text-emerald-400 flex items-start gap-2">
-                <CheckCircle size={15} className="mt-0.5 text-emerald-400 flex-shrink-0" />
+              <div className="bg-emerald-50 border border-emerald-250 rounded-xl p-3 text-xs text-emerald-600 flex items-start gap-2">
+                <CheckCircle size={15} className="mt-0.5 text-emerald-500 flex-shrink-0" />
                 <span>{adminSuccess}</span>
               </div>
             )}
 
-            <div className="space-y-1.5">
-              <label className="text-xs text-slate-400 font-mono tracking-wider font-semibold uppercase block">
-                Email Administrateur <span className="text-red-500">*</span>
-              </label>
-              <div className="relative">
-                <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-500 pointer-events-none">
-                  <Mail size={15} />
-                </span>
-                <input
-                  type="email"
-                  required
-                  value={adminEmail}
-                  onChange={(e) => setAdminEmail(e.target.value)}
-                  placeholder="admin@flash-compte.com"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-4 py-3 text-xs text-white focus:outline-none focus:border-blue-500 transition font-medium"
-                />
+            <form onSubmit={handleAdminSubmit} className="space-y-4 text-left">
+              
+              <div className="space-y-1">
+                <label className="text-[10px] text-slate-500 font-mono tracking-wider font-bold uppercase block">
+                  Identifiant Admin
+                </label>
+                <div className="flex border border-slate-200 rounded-xl overflow-hidden focus-within:border-blue-500 transition bg-white shadow-sm">
+                  <div className="bg-slate-50 border-r border-slate-200 px-4 flex items-center justify-center text-slate-400 shrink-0">
+                    <Mail size={15} />
+                  </div>
+                  <input
+                    type="email"
+                    required
+                    value={adminEmail}
+                    onChange={(e) => setAdminEmail(e.target.value)}
+                    className="w-full bg-white px-4 py-3 text-xs text-slate-800 font-medium focus:outline-none"
+                    placeholder="E-mail"
+                  />
+                </div>
               </div>
-            </div>
 
-            <div className="space-y-1.5">
-              <label className="text-xs text-slate-400 font-mono tracking-wider font-semibold uppercase block">
-                Mot de Passe Administrateur <span className="text-red-500">*</span>
-              </label>
-              <div className="relative">
-                <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-500 pointer-events-none">
-                  <Lock size={15} />
-                </span>
-                <input
-                  type={adminShowPassword ? "text" : "password"}
-                  required
-                  value={adminPassword}
-                  onChange={(e) => setAdminPassword(e.target.value)}
-                  placeholder="Min. 6 caractères"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-10 py-3 text-xs text-white focus:outline-none focus:border-blue-500 transition font-medium"
-                />
+              <div className="space-y-1">
+                <label className="text-[10px] text-slate-500 font-mono tracking-wider font-bold uppercase block">
+                  Mot de Passe
+                </label>
+                <div className="relative flex border border-slate-200 rounded-xl overflow-hidden focus-within:border-blue-500 transition bg-white shadow-sm">
+                  <div className="bg-slate-50 border-r border-slate-200 px-4 flex items-center justify-center text-slate-400 shrink-0">
+                    <Lock size={15} />
+                  </div>
+                  <input
+                    type={adminShowPassword ? "text" : "password"}
+                    required
+                    value={adminPassword}
+                    onChange={(e) => setAdminPassword(e.target.value)}
+                    className="w-full bg-white px-4 py-3 text-xs text-slate-800 font-medium focus:outline-none"
+                    placeholder="Mot de passe"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setAdminShowPassword(!adminShowPassword)}
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-660 cursor-pointer"
+                  >
+                    {adminShowPassword ? <EyeOff size={14} /> : <Eye size={14} />}
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between text-[11px] pt-1">
                 <button
                   type="button"
-                  onClick={() => setAdminShowPassword(!adminShowPassword)}
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-500 hover:text-white cursor-pointer"
+                  onClick={() => {
+                    setAdminMode(adminMode === 'signin' ? 'signup' : 'signin');
+                    setAdminError(null);
+                    setAdminSuccess(null);
+                  }}
+                  className="text-blue-600 hover:text-blue-700 font-bold transition hover:underline bg-transparent border-none p-0 cursor-pointer"
                 >
-                  {adminShowPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                  {adminMode === 'signin' 
+                    ? "Créer un compte opérateur" 
+                    : "Retour à l'authentification"}
                 </button>
+                <span className="text-slate-400 font-mono">Firebase</span>
               </div>
-            </div>
 
-            <div className="flex items-center justify-between text-[11px] pt-1">
               <button
-                type="button"
-                onClick={() => {
-                  setAdminMode(adminMode === 'signin' ? 'signup' : 'signin');
-                  setAdminError(null);
-                  setAdminSuccess(null);
-                }}
-                className="text-blue-400 hover:text-blue-300 font-bold transition hover:underline bg-transparent border-none p-0 cursor-pointer"
+                type="submit"
+                disabled={adminLoading}
+                className="w-full py-3.5 bg-blue-600 hover:bg-blue-750 disabled:opacity-50 text-white font-bold rounded-xl text-xs uppercase cursor-pointer transition shadow-md flex items-center justify-center gap-1.5 mt-2"
               >
-                {adminMode === 'signin' 
-                  ? "Créer un compte opérateur" 
-                  : "Déjà un compte ? Connectez-vous"}
+                {adminLoading ? "Traitement..." : (
+                  adminMode === 'signin' ? "Connexion administration" : "Créer le compte"
+                )}
               </button>
-              <span className="text-slate-500 font-mono">Firebase Secure</span>
+            </form>
+
+            <div className="pt-4 border-t border-slate-100 text-center">
+              <button 
+                type="button" 
+                onClick={() => setActiveTab('beneficiary')} 
+                className="text-xs text-gray-500 hover:text-blue-600 font-bold transition cursor-pointer select-none"
+              >
+                ← Retour à l'Espace Client
+              </button>
             </div>
 
-            <button
-              type="submit"
-              disabled={adminLoading}
-              className="w-full py-3 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold rounded-2xl text-xs uppercase cursor-pointer transition shadow-lg shadow-blue-500/10 flex items-center justify-center gap-1.5 mt-2"
-            >
-              {adminLoading ? "Traitement avec Firebase..." : (
-                adminMode === 'signin' ? "Connexion administration" : "Créer mon compte"
-              )}
-              <ArrowRight size={14} />
-            </button>
-          </form>
+            {/* Quick Demo Access Bypass Button */}
+            <div className="pt-2 flex flex-col items-center">
+              <button
+                onClick={onBypassAdmin}
+                className="w-full py-2 border border-dashed border-slate-300 hover:border-blue-500/50 hover:bg-slate-50 text-slate-500 hover:text-blue-600 rounded-xl text-[10px] font-bold cursor-pointer transition-all duration-200"
+              >
+                ⚡ Entrée de démonstration rapide (Contourner l'Admin)
+              </button>
+            </div>
+          </div>
         )}
 
-        {/* Demo Fast Sandbox Entry Indicator */}
-        <div className="mt-6 pt-5 border-t border-slate-850 flex flex-col items-center select-none">
-          <p className="text-[10px] text-slate-500 text-center mb-2 font-medium">
-            Entrée rapide de démonstration pour inspecter les outils d'évaluation
-          </p>
-          <button
-            onClick={onBypassAdmin}
-            className="w-full py-2 border border-dashed border-slate-700 hover:border-blue-500/50 hover:bg-blue-950/20 text-slate-400 hover:text-blue-400 rounded-xl text-[11px] font-bold cursor-pointer transition-all duration-200 flex items-center justify-center gap-1.5"
-          >
-            <Zap className="text-amber-400 fill-amber-400/20" size={13} />
-            Accéder directement sans mot de passe (Version Demo)
-          </button>
-        </div>
-
-      </div>
-
-      {/* Aesthetic credentials tips footer */}
-      <div className="mt-4 text-center select-none text-[10px] text-slate-600 font-mono flex items-center gap-1">
-        <HelpCircle size={12} />
-        <span>Astuce : Un client se connecte à sa simulation en saisissant son e-mail & PIN générés</span>
       </div>
 
     </div>

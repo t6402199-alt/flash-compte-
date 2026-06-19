@@ -32,6 +32,8 @@ interface SimulatedBankPortalProps {
   onClose: () => void;
   onSetCompleted: (id: string) => void;
   onTriggerEmailNotification?: (title: string, content: string, status: 'Envoyé' | 'En attente' | 'Échoué') => void;
+  isFirebaseAuthed?: boolean;
+  firebaseSignOut?: () => void;
 }
 
 interface SimulatedEmail {
@@ -48,7 +50,9 @@ export default function SimulatedBankPortal({
   transfer, 
   onClose, 
   onSetCompleted, 
-  onTriggerEmailNotification 
+  onTriggerEmailNotification,
+  isFirebaseAuthed = false,
+  firebaseSignOut
 }: SimulatedBankPortalProps) {
   
   // PRIMARY PORTAL NAVIGATION
@@ -100,12 +104,35 @@ export default function SimulatedBankPortal({
   const [selectedInboxEmail, setSelectedInboxEmail] = useState<SimulatedEmail | null>(null);
   const [unreadCount, setUnreadCount] = useState(0);
 
-  // Pre-fill input forms to speed up evaluator validation and avoid any credential mismatches
-  useEffect(() => {
-    if (transfer) {
-      setInputEmail(transfer.email);
-      setInputPin(transfer.codePin);
+  const getCurrencyDetails = () => {
+    const cur = transfer.currency || 'EUR (€)';
+    if (cur.includes('XOF') || cur.includes('FCFA (XOF)')) {
+      return { symbol: 'F.CFA', code: 'XOF' };
     }
+    if (cur.includes('XAF') || cur.includes('FCFA (XAF)')) {
+      return { symbol: 'F.CFA', code: 'XAF' };
+    }
+    if (cur.includes('USD') || cur.includes('$')) {
+      return { symbol: '$', code: 'USD' };
+    }
+    if (cur.includes('RON') || cur.includes('lei') || cur.includes('Leu')) {
+      return { symbol: 'lei', code: 'RON' };
+    }
+    if (cur.includes('BRL') || cur.includes('R$') || cur.includes('Real')) {
+      return { symbol: 'R$', code: 'BRL' };
+    }
+    if (cur.includes('HUF') || cur.includes('Ft') || cur.includes('Hongrie') || cur.includes('Forint')) {
+      return { symbol: 'Ft', code: 'HUF' };
+    }
+    // Default to EUR
+    return { symbol: '€', code: 'EUR' };
+  };
+
+  const { symbol: curSymbol, code: curCode } = getCurrencyDetails();
+
+  // Keep forms clean and empty by default as requested to match actual site production login state
+  useEffect(() => {
+    // Left purposefully empty to not pre-fill simulated inputs with credentials
   }, [transfer]);
 
   // LOGIN HANDLER
@@ -137,7 +164,7 @@ export default function SimulatedBankPortal({
     let body = '';
     
     if (type === 'SUCCESS') {
-      subject = `✅ [TRANSFERWIRE] Virement de ${transfer.amount.toLocaleString('fr-FR')} EUR effectué avec succès`;
+      subject = `✅ [TRANSFERWIRE] Virement de ${transfer.amount.toLocaleString('fr-FR')} ${curCode} effectué avec succès`;
       body = `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; background-color: #ffffff;">
           <div style="background-color: #1e3a8a; color: #ffffff; padding: 24px; text-align: center;">
@@ -164,11 +191,11 @@ export default function SimulatedBankPortal({
               </tr>
               <tr>
                 <td style="padding: 10px 14px; border-bottom: 1px solid #f1f5f9; color: #64748b;">Montant transféré :</td>
-                <td style="padding: 10px 14px; border-bottom: 1px solid #f1f5f9; font-weight: bold; text-align: right; color: #0f172a; font-size: 16px;">${transfer.amount.toLocaleString('fr-FR')} EUR</td>
+                <td style="padding: 10px 14px; border-bottom: 1px solid #f1f5f9; font-weight: bold; text-align: right; color: #0f172a; font-size: 16px;">${transfer.amount.toLocaleString('fr-FR')} ${curSymbol}</td>
               </tr>
               <tr>
                 <td style="padding: 10px 14px; color: #64748b;">Frais et Timbres :</td>
-                <td style="padding: 10px 14px; font-weight: bold; text-align: right; color: #22c55e;">Gratuit (0,00 EUR)</td>
+                <td style="padding: 10px 14px; font-weight: bold; text-align: right; color: #22c55e;">Gratuit (0,00 ${curSymbol})</td>
               </tr>
             </table>
 
@@ -193,7 +220,7 @@ export default function SimulatedBankPortal({
           </div>
           <div style="padding: 24px; font-size: 14px; line-height: 1.6; color: #334155;">
             <p>Cher(e) client (e), <strong>${transfer.firstName} ${transfer.lastName}</strong>,</p>
-            <p>Notre automate interbancaire de surveillance de routage a immédiatement bloqué le virement externe sortant de <strong>${transfer.amount.toLocaleString('fr-FR')} EUR</strong> initié depuis votre compte.</p>
+            <p>Notre automate interbancaire de surveillance de routage a immédiatement bloqué le virement externe sortant de <strong>${transfer.amount.toLocaleString('fr-FR')} ${curSymbol}</strong> initié depuis votre compte.</p>
             
             <div style="background-color: #fff1f2; border: 1px solid #ffe4e6; border-radius: 8px; padding: 15px; margin: 15px 0;">
               <h4 style="margin: 0 0 4px 0; color: #9f1239; font-size: 12px; text-transform: uppercase; font-family: monospace;">Rapport administratif du blocage :</h4>
@@ -207,11 +234,11 @@ export default function SimulatedBankPortal({
             <table style="width: 100%; border-collapse: collapse; margin: 15px 0; background-color: #fffaf0; border: 1px solid #fef3c7;">
               <tr>
                 <td style="padding: 10px 14px; border-bottom: 1px solid #fef3c7; color: #b45309;">Solde en transit consigné :</td>
-                <td style="padding: 10px 14px; border-bottom: 1px solid #fef3c7; font-weight: bold; text-align: right; color: #b45309;">${transfer.amount.toLocaleString('fr-FR')} EUR</td>
+                <td style="padding: 10px 14px; border-bottom: 1px solid #fef3c7; font-weight: bold; text-align: right; color: #b45309;">${transfer.amount.toLocaleString('fr-FR')} ${curSymbol}</td>
               </tr>
               <tr style="background-color: #fff5f5;">
                 <td style="padding: 12px 14px; font-weight: bold; color: #9f1239;">Frais à régulariser (${transfer.feePercent}%) :</td>
-                <td style="padding: 12px 14px; font-weight: bold; color: #b91c1c; text-align: right; font-size: 16px;">${feesVal.toLocaleString('fr-FR')} EUR</td>
+                <td style="padding: 12px 14px; font-weight: bold; color: #b91c1c; text-align: right; font-size: 16px;">${feesVal.toLocaleString('fr-FR')} ${curSymbol}</td>
               </tr>
             </table>
 
@@ -429,22 +456,26 @@ export default function SimulatedBankPortal({
               )}
             </button>
 
-            {/* Back to administrative console */}
-            <button
-              onClick={onClose}
-              className="px-3.5 py-1.5 bg-rose-650 hover:bg-rose-700 text-white font-black text-xs rounded-xl flex items-center gap-1 cursor-pointer transition border border-rose-500/20"
-            >
-              <ChevronLeft size={13} /> Espace Admin
-            </button>
+            {/* Back to administrative console or firebase logout */}
+            {isFirebaseAuthed ? (
+              <button
+                onClick={firebaseSignOut}
+                className="px-3.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white font-black text-xs rounded-xl flex items-center gap-1 cursor-pointer transition border border-rose-500/20"
+              >
+                ✖ Déconnexion
+              </button>
+            ) : (
+              <button
+                onClick={onClose}
+                className="px-3.5 py-1.5 bg-rose-650 hover:bg-rose-700 text-white font-black text-xs rounded-xl flex items-center gap-1 cursor-pointer transition border border-rose-500/20"
+              >
+                <ChevronLeft size={13} /> Espace Admin
+              </button>
+            )}
           </div>
         </div>
 
-        {/* Dynamic testing Cheat Sheet helper band */}
-        <div className="bg-amber-100 border-b border-amber-200 px-4 py-2.5 flex flex-wrap items-center justify-between text-[11px] text-slate-700 gap-3 font-medium select-none">
-          <span className="flex items-center gap-1">Simulation : <strong className="text-slate-900 bg-amber-200 px-1.5 py-0.5 rounded uppercase text-[10px]">TRANSFERWIRE V1 Active</strong></span>
-          <span className="flex items-center gap-1.5">Email : <strong className="text-indigo-700 font-mono font-bold bg-white px-2 py-0.5 rounded border border-amber-250">{transfer.email}</strong></span>
-          <span className="flex items-center gap-1.5">Code d'accès : <strong className="text-emerald-800 font-mono font-black bg-white px-2 py-0.5 rounded border border-emerald-300">{transfer.codePin}</strong></span>
-        </div>
+        {/* Cheat sheet helper band removed to respect product-matching layout requirements */}
 
         <div className="flex-1 flex flex-col md:flex-row overflow-hidden relative">
           
@@ -516,102 +547,101 @@ export default function SimulatedBankPortal({
               <div className="flex-1 flex items-center justify-center p-4">
                 <main className="w-full max-w-md bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 shadow-xl animate-scale-up text-center">
                   
-                  {/* Brand logo in shades of blue/teal */}
-                  <div className="inline-flex items-center gap-1.5 mb-2 select-none">
-                    <span className="h-6 w-6 rounded-lg bg-blue-600 flex items-center justify-center text-white font-black text-xs shadow-md">W</span>
-                    <strong className="text-blue-900 font-black text-lg tracking-wider font-sans uppercase">TRANSFERWIRE</strong>
+                  {/* Brand logo in shades of blue/teal as on Photo 2 */}
+                  <div className="flex flex-col items-center mb-6">
+                    <div className="flex items-center justify-center gap-2 select-none font-sans">
+                      <svg className="w-14 h-14 shrink-0" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <circle cx="50" cy="18" r="4.5" fill="#10B981" />
+                        <circle cx="64" cy="22" r="5" fill="#34D399" />
+                        <circle cx="76" cy="32" r="5.5" fill="#059669" />
+                        <circle cx="82" cy="46" r="6" fill="#3B82F6" />
+                        <circle cx="80" cy="61" r="5.5" fill="#2563EB" />
+                        <circle cx="72" cy="74" r="5" fill="#1D4ED8" />
+                        <circle cx="59" cy="81" r="4.5" fill="#1E40AF" />
+                        <circle cx="45" cy="81" r="4.5" fill="#0284C7" />
+                        <circle cx="31" cy="74" r="5" fill="#0EA5E9" />
+                        <circle cx="21" cy="62" r="5.5" fill="#38BDF8" />
+                        <circle cx="18" cy="47" r="6" fill="#10B981" />
+                        <circle cx="22" cy="33" r="5" fill="#6EE7B7" />
+                        <circle cx="32" cy="22" r="4" fill="#A7F3D0" />
+                        <circle cx="48" cy="42" r="6" fill="#059669" />
+                        <circle cx="58" cy="46" r="5.5" fill="#10B981" />
+                        <circle cx="62" cy="56" r="5" fill="#2563EB" />
+                        <circle cx="54" cy="64" r="5.5" fill="#3B82F6" />
+                        <circle cx="44" cy="61" r="6" fill="#0284C7" />
+                        <circle cx="38" cy="51" r="5" fill="#34D399" />
+                      </svg>
+                      <span className="text-2xl font-black tracking-wider text-[#0F62FE]">TRANSFERWIRE</span>
+                    </div>
                   </div>
 
                   <h3 className="text-lg font-black text-slate-900 mb-1 font-sans">Connexion à votre compte</h3>
                   
-                  {/* User profile capsule banner row */}
-                  <div className="my-4 inline-flex items-center gap-2 px-4 py-2 bg-slate-100 border border-slate-200 rounded-full text-xs font-extrabold text-slate-700 select-none shadow-sm capitalize">
-                    <span className="h-5 w-5 bg-blue-600 rounded-full flex items-center justify-center text-white"><User size={12} /></span>
-                    {transfer.firstName} {transfer.lastName}
-                  </div>
-
-                  {/* Warning test banner */}
-                  <div className="bg-amber-50 border border-amber-250 p-4 rounded-2xl text-left space-y-1.5 mb-5 select-none text-[11px] leading-relaxed">
-                    <strong className="text-amber-800 font-black uppercase text-[10px] block font-semibold">🔍 Notice d'évaluation Active :</strong>
-                    <p className="text-slate-805 text-justify">
-                      Vous êtes en mode Test. Ce message est automatiquement supprimé avec un vrai flash compte client.
-                    </p>
-                    <div className="pt-1.5 border-t border-amber-200 space-y-1">
-                      <p className="font-semibold text-amber-900">
-                        • Pour simuler un échec à {transfer.stopPercentage}% (ou blocage d'évaluation), saisissez le code : <strong className="font-mono bg-white px-1.5 py-0.5 rounded text-[10px] border border-amber-300">000000</strong>
-                      </p>
-                      <p className="font-semibold text-emerald-850">
-                        • Pour un virement libéré à 100% avec succès, saisissez le code : <strong className="font-mono bg-white px-1.5 py-0.5 rounded text-[10px] border border-emerald-300">111111</strong>
-                      </p>
-                    </div>
+                  {/* User profile capsule banner row as on Photo 2 */}
+                  <div className="my-4 flex flex-col items-center justify-center gap-1.5 p-4 bg-slate-100 border border-slate-200 rounded-2xl text-center select-none shadow-sm w-full">
+                    <span className="font-extrabold text-slate-800 text-sm sm:text-base tracking-wide uppercase">
+                      {((transfer.firstName && transfer.lastName) 
+                        ? `${transfer.firstName} ${transfer.lastName}` 
+                        : (transfer.recipientName || 'Bénéficiaire')
+                      ).toUpperCase()}
+                    </span>
+                    <span className="font-mono text-xs text-slate-500 font-semibold select-all">
+                      {transfer.email}
+                    </span>
                   </div>
 
                   <form onSubmit={handleLoginSubmit} className="space-y-4 text-left">
-                    {/* E-mail Input block */}
-                    <div className="space-y-1">
-                      <label className="text-[10px] text-slate-500 block font-mono font-bold uppercase tracking-wider">Adresse e-mail :</label>
-                      <div className="relative">
-                        <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400">
-                          <Mail size={14} />
-                        </span>
-                        <input
-                          type="email"
-                          required
-                          value={inputEmail}
-                          onChange={(e) => setInputEmail(e.target.value)}
-                          className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-4 py-2.5 text-xs text-slate-950 focus:outline-none focus:border-blue-600 focus:bg-white font-medium/semibold transition"
-                          placeholder="votre@mail.com"
-                        />
+                    {/* E-mail Input block (No labels, no guidelines, empty placeholder, with gray icon) */}
+                    <div className="flex border border-slate-200 rounded-xl overflow-hidden focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500/50 transition bg-white shadow-sm">
+                      <div className="bg-slate-50 border-r border-slate-200 px-4 flex items-center justify-center text-slate-400 shrink-0 select-none">
+                        <Mail size={15} />
                       </div>
+                      <input
+                        type="email"
+                        required
+                        value={inputEmail}
+                        onChange={(e) => setInputEmail(e.target.value)}
+                        className="w-full bg-white px-4 py-3.5 text-xs sm:text-sm text-slate-800 font-medium focus:outline-none"
+                        placeholder=""
+                      />
                     </div>
 
-                    {/* PIN Access Code block */}
-                    <div className="space-y-1">
-                      <div className="flex justify-between items-center">
-                        <label className="text-[10px] text-slate-500 block font-mono font-bold uppercase tracking-wider">Code d'accès sécurisé :</label>
-                        <span className="text-[9px] text-indigo-600 bg-indigo-50 border border-indigo-100 rounded px-1.5 py-0.5 font-bold font-mono">Entrée Requis</span>
+                    {/* PIN Access Code block (No labels, no guidelines, empty placeholder, with gray icon) */}
+                    <div className="relative flex border border-slate-200 rounded-xl overflow-hidden focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500/50 transition bg-white shadow-sm">
+                      <div className="bg-slate-50 border-r border-slate-200 px-4 flex items-center justify-center text-slate-400 shrink-0 select-none">
+                        <Lock size={15} />
                       </div>
-                      
-                      <div className="relative">
-                        <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400">
-                          <Lock size={14} />
-                        </span>
-                        <input
-                          type={showPin ? 'text' : 'password'}
-                          required
-                          value={inputPin}
-                          onChange={(e) => setInputPin(e.target.value.replace(/[^0-9]/g, ''))}
-                          className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-10 py-2.5 text-xs text-slate-950 focus:outline-none focus:border-blue-600 focus:bg-white font-mono font-semibold tracking-wider transition"
-                          placeholder="------"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowPin(!showPin)}
-                          className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-650"
-                        >
-                          {showPin ? <EyeOff size={14} /> : <Eye size={14} />}
-                        </button>
-                      </div>
+                      <input
+                        type={showPin ? 'text' : 'password'}
+                        required
+                        value={inputPin}
+                        onChange={(e) => setInputPin(e.target.value)}
+                        className="w-full bg-white px-4 py-3.5 text-xs sm:text-sm text-slate-800 font-mono font-bold tracking-widest focus:outline-none"
+                        placeholder=""
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPin(!showPin)}
+                        className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-650"
+                      >
+                        {showPin ? <EyeOff size={14} /> : <Eye size={14} />}
+                      </button>
                     </div>
 
                     {/* Submit gate button */}
                     {loginError && (
                       <div className="bg-rose-50 border border-rose-200 text-rose-600 rounded-xl p-3 text-[10px] text-center font-bold">
-                        E-mail ou code d'accès incorrect. Veuillez vous référer aux indices d'évaluation.
+                        E-mail ou code d'accès incorrect. Veuillez vérifier vos identifiants.
                       </div>
                     )}
 
                     <button
                       type="submit"
-                      className="w-full py-3 bg-blue-600 hover:bg-blue-755 text-white font-black rounded-xl text-xs uppercase tracking-wider cursor-pointer shadow-lg active:scale-95 transition-all text-center flex items-center justify-center gap-1.5 font-semibold"
+                      className="w-full py-4 bg-[#0F62FE] hover:bg-[#0b4ecb] text-white font-extrabold rounded-xl text-xs sm:text-sm cursor-pointer shadow-md active:scale-95 transition-all text-center flex items-center justify-center uppercase tracking-wider font-semibold"
                     >
-                      Se connecter ➔
+                      se connecter
                     </button>
                   </form>
-
-                  <p className="text-[9px] text-slate-400 text-center mt-6 uppercase tracking-wider font-semibold select-none leading-normal">
-                    🔒 Système d'intermédiation monétaire certifiée PCI-DSS v4
-                  </p>
                 </main>
               </div>
             )}
@@ -1202,6 +1232,9 @@ export default function SimulatedBankPortal({
                               resetVirementWizard();
                               setCurrentScreen('LOGIN');
                               setInputPin('');
+                              if (isFirebaseAuthed && firebaseSignOut) {
+                                firebaseSignOut();
+                              }
                             }}
                             className="bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 font-bold py-2.5 px-4 rounded-xl text-xs uppercase tracking-wide cursor-pointer transition flex items-center gap-1"
                           >

@@ -36,6 +36,7 @@ import {
   saveBalanceToDb,
   getTransferByIdFromDb,
   findTransferByAnyField,
+  getTransfersByEmailFromDb,
   db,
   auth
 } from './lib/firebase';
@@ -53,19 +54,48 @@ export default function App() {
 
   // Authentication State
   const [currentUser, setCurrentUser] = useState<any>(null);
+  const [userRole, setUserRole] = useState<'admin' | 'client' | null>(() => {
+    return localStorage.getItem('user_role') as 'admin' | 'client' | null;
+  });
   const [authLoading, setAuthLoading] = useState<boolean>(true);
   const [bypassAdmin, setBypassAdmin] = useState<boolean>(false);
 
   // Subscribe to Firebase Authentication state change
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setCurrentUser(user);
+      if (user) {
+        const savedRole = localStorage.getItem('user_role') as 'admin' | 'client' | null;
+        if (savedRole === 'client') {
+          setUserRole('client');
+          const matches = await getTransfersByEmailFromDb(user.email || '');
+          if (matches.length > 0) {
+            setLiveSimulationTx(matches[0]);
+          }
+        } else if (savedRole === 'admin') {
+          setUserRole('admin');
+        } else {
+          // Default to client role
+          setUserRole('client');
+          localStorage.setItem('user_role', 'client');
+          const matches = await getTransfersByEmailFromDb(user.email || '');
+          if (matches.length > 0) {
+            setLiveSimulationTx(matches[0]);
+          }
+        }
+      } else {
+        setUserRole(null);
+        localStorage.removeItem('user_role');
+        setLiveSimulationTx(null);
+      }
       setAuthLoading(false);
     });
     return () => unsubscribe();
   }, []);
 
   // Core App states loaded from Firestore with local state for visual speed
+  const isClient = userRole === 'client';
+
   const [balance, setBalance] = useState<number>(1525000);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [campaigns, setCampaigns] = useState<CampaignLog[]>([]);
@@ -401,6 +431,8 @@ export default function App() {
     try {
       await signOut(auth);
       setCurrentUser(null);
+      setUserRole(null);
+      localStorage.removeItem('user_role');
       setBypassAdmin(false);
       setLiveSimulationTx(null);
       onCreateToast("Déconnexion réussie !");
@@ -630,31 +662,25 @@ export default function App() {
   }
 
   // Handle Authentication Gate for operators and client logins
-  const isOperatorAuthenticated = currentUser !== null || bypassAdmin === true;
+  const isOperatorAuthenticated = (currentUser !== null && userRole === 'admin') || bypassAdmin === true;
+  const isClientAuthenticated = (currentUser !== null && userRole === 'client') || (liveSimulationTx !== null && userRole === 'client');
+  const isAuthenticated = isOperatorAuthenticated || isClientAuthenticated;
   
-  if (!isOperatorAuthenticated) {
-    if (liveSimulationTx) {
-      // Allow recipient direct access to the simulation portal
-      return (
-        <SimulatedBankPortal 
-          transfer={liveSimulationTx} 
-          onClose={() => setLiveSimulationTx(null)} 
-          onSetCompleted={onSetCompleted}
-          onTriggerEmailNotification={onTriggerEmailNotification}
-        />
-      );
-    }
-    
+  if (!isAuthenticated) {
     // Otherwise show login options
     return (
       <AuthGate 
         onAdminAuthenticated={(user) => {
           setCurrentUser(user);
+          setUserRole('admin');
+          localStorage.setItem('user_role', 'admin');
         }}
         onBypassAdmin={() => {
           setBypassAdmin(true);
         }}
         onBeneficiaryAuthenticated={(transfer) => {
+          setUserRole('client');
+          localStorage.setItem('user_role', 'client');
           setLiveSimulationTx(transfer);
         }}
         transfers={transfers}
@@ -664,8 +690,8 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex font-sans selection:bg-blue-600 selection:text-white antialiased">
-      {/* Sidebar navigation component */}
+    <div className={`min-h-screen bg-[#F3F4F6] text-slate-800 flex font-sans selection:bg-blue-600 selection:text-white antialiased transition-all duration-150`}>
+      {/* Sidebar navigation component - Always available for direct unrestricted tool navigation as requested */}
       <Sidebar 
         activeTab={activeTab} 
         setActiveTab={setActiveTab} 
@@ -675,21 +701,54 @@ export default function App() {
       />
 
       {/* Main Workspace Frame */}
-      <main className="flex-1 md:ml-64 p-4 sm:p-6 lg:p-8 pt-20 md:pt-8 min-h-screen flex flex-col justify-between">
+      <main className="flex-1 p-3 sm:p-6 lg:p-8 pt-4 min-h-screen flex flex-col justify-between transition-all md:ml-64">
         <div className="max-w-7xl w-full mx-auto space-y-6">
           
-          {/* Top header diagnostics status */}
-          <header className="hidden md:flex items-center justify-between border-b border-slate-900 pb-5 mb-2 select-none">
-            <div>
-              <span className="text-xs text-slate-500 font-mono tracking-wider font-semibold uppercase">FlashConnect Omnichannel Core</span>
-              <p className="text-xs text-slate-400 font-medium">Console administrative de routage digital & d'évaluation</p>
+          {/* KitsCms TOP BRAND HEADER - Styled EXACTLY like the screenshot original site */}
+          <header className="bg-white border border-slate-200 rounded-3xl p-4 sm:px-6 sm:py-4 flex items-center justify-between shadow-sm select-none">
+            <div className="flex items-center gap-3">
+              {/* 3D Isometric KitsCms Cube Logo */}
+              <div className="h-10 w-10 shrink-0 flex items-center justify-center">
+                <svg className="w-10 h-10 select-none" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  {/* Top Panel (Blue) */}
+                  <path d="M12 2L21 6.5L12 11L3 6.5L12 2Z" fill="#3B82F6" />
+                  {/* Left Panel (Orange/Yellow) */}
+                  <path d="M3 6.5L12 11V21L3 16.5V6.5Z" fill="#F97316" />
+                  {/* Right Panel (Green) */}
+                  <path d="M12 11L21 6.5V16.5L12 21V11Z" fill="#10B981" />
+                </svg>
+              </div>
+              <div>
+                <span className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight font-sans">
+                  <span className="text-emerald-500 font-extrabold select-none">Kits</span>
+                  <span className="text-blue-600 select-none">Cms</span>
+                </span>
+                <p className="text-[9px] text-slate-400 font-black leading-none font-mono tracking-widest uppercase">WORKSPACE ENTERPRISE</p>
+              </div>
             </div>
-            <div className="flex items-center gap-4 text-xs font-mono">
-              <span className="flex items-center gap-1.5 text-slate-400">
-                <span className="h-2 w-2 rounded-full bg-emerald-500" /> Passerelle CFA CONNECTEE
-              </span>
-              <span className="text-slate-600">|</span>
-              <span className="text-slate-400">API: v2.5.9-LTS</span>
+            
+            {/* Action buttons on right */}
+            <div className="flex items-center gap-3">
+              {/* Grid categories shortcut icon in white/light blue card */}
+              <div className="p-2.5 bg-slate-100 hover:bg-slate-200 text-blue-600 rounded-2xl flex items-center justify-center cursor-pointer transition shadow-sm border border-slate-200/40">
+                <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <rect x="3" y="3" width="7" height="7" rx="1.5" fill="currentColor" />
+                  <rect x="14" y="3" width="7" height="7" rx="1.5" fill="currentColor" />
+                  <rect x="3" y="14" width="7" height="7" rx="1.5" fill="currentColor" />
+                  <rect x="14" y="14" width="7" height="7" rx="1.5" fill="currentColor" />
+                </svg>
+              </div>
+              
+              {/* Logout Power Red Button */}
+              <button 
+                onClick={handleLogout}
+                title="Se déconnecter de la session"
+                className="w-10 h-10 rounded-2xl bg-rose-500 hover:bg-rose-600 text-white flex items-center justify-center shadow-md shadow-rose-500/10 cursor-pointer transition duration-150"
+              >
+                <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                </svg>
+              </button>
             </div>
           </header>
 
@@ -705,6 +764,10 @@ export default function App() {
               transactions={transactions}
               setActiveTab={setActiveTab}
               setQuickTrialModal={setQuickTrialModal}
+              isAdmin={true}
+              clientTransfer={liveSimulationTx}
+              onLaunchSimulation={(tx) => setLiveSimulationTx(tx)}
+              onAddBalance={onAddBalance}
             />
           )}
 
@@ -801,6 +864,8 @@ export default function App() {
           onClose={() => setLiveSimulationTx(null)} 
           onSetCompleted={onSetCompleted}
           onTriggerEmailNotification={onTriggerEmailNotification}
+          isFirebaseAuthed={currentUser !== null && userRole === 'client'}
+          firebaseSignOut={handleLogout}
         />
       )}
 
