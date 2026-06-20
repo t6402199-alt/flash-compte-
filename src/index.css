@@ -23,3 +23,112 @@
   background: #475569;
 }
 
+/* ----------------------------------------------------
+   AUTOMATIC DARK THEME OVERRIDES BASED ON SYSTEM THEME
+   ---------------------------------------------------- */
+.dark {
+  background-color: #0b0f19 !important;
+}
+
+.dark body {
+  background-color: #0b0f19 !important;
+  color: #f1f5f9 !important;
+}
+
+/* Outer workspace frame background gray -> deep dark slate */
+.dark div.bg-\[\#F3F4F6\], 
+.dark .min-h-screen,
+.dark main {
+  background-color: #080c14 !important;
+}
+
+/* White background panels and header components -> sleek dark cards */
+.dark .bg-white,
+.dark header,
+.dark .bg-white\/90,
+.dark .bg-white\/80 {
+  background-color: #111726 !important;
+  border-color: #1f2a41 !important;
+}
+
+/* Main title items */
+.dark .text-slate-900,
+.dark .text-slate-800,
+.dark .text-slate-700,
+.dark .text-slate-950,
+.dark h2,
+.dark h3 {
+  color: #f8fafc !important;
+}
+
+/* Secondary descriptions and labels */
+.dark .text-slate-650,
+.dark .text-slate-600,
+.dark .text-slate-500,
+.dark .text-slate-550,
+.dark p {
+  color: #94a3b8 !important;
+}
+
+.dark .text-slate-400 {
+  color: #64748b !important;
+}
+
+/* Border configurations */
+.dark .border-slate-100,
+.dark .border-slate-200,
+.dark .border-slate-300 {
+  border-color: #1f2a41 !important;
+}
+
+/* Input elements, Selects and forms */
+.dark input,
+.dark select,
+.dark textarea {
+  background-color: #182032 !important;
+  border-color: #2e3e5c !important;
+  color: #ffffff !important;
+}
+
+.dark input::placeholder {
+  color: #4b5d7d !important;
+}
+
+/* Grey backgrounds inside cards or list elements -> charcoal slate */
+.dark .bg-slate-50,
+.dark .bg-slate-100,
+.dark .bg-slate-100\/50,
+.dark .bg-slate-200\/20,
+.dark .bg-slate-100\/80,
+.dark .bg-slate-50\/40,
+.dark .bg-slate-50\/30 {
+  background-color: #161d2d !important;
+}
+
+/* Blue transparent overlays */
+.dark .bg-blue-50 {
+  background-color: rgba(30, 41, 59, 0.4) !important;
+}
+
+/* Green transparent overlays */
+.dark .bg-emerald-50 {
+  background-color: rgba(6, 78, 59, 0.4) !important;
+}
+
+/* Text primary accents */
+.dark .text-blue-600,
+.dark .text-blue-700 {
+  color: #3b82f6 !important;
+}
+
+.dark .text-emerald-600,
+.dark .text-emerald-700 {
+  color: #10b981 !important;
+}
+
+.dark .bg-slate-55,
+.dark .bg-slate-105 {
+  background-color: #202b3f !important;
+}
+
+

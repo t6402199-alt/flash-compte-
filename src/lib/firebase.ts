@@ -19,7 +19,7 @@ import {
   signOut,
   onAuthStateChanged
 } from 'firebase/auth';
-import { Contact, CampaignLog, PaymentTransaction, SimulatedTransfer } from '../types';
+import { Contact, CampaignLog, PaymentTransaction, SimulatedTransfer, Client } from '../types';
 
 import firebaseConfig from '../../firebase-applet-config.json';
 
@@ -68,9 +68,19 @@ export async function saveTransferToDb(transfer: SimulatedTransfer): Promise<voi
   try {
     const { id, ...data } = transfer;
     const docRef = doc(db, TRANSFERS_COL, id);
-    await setDoc(docRef, data, { merge: true });
+    
+    // Stringent sanitation of undefined values to guarantee successful Firestore insertion
+    const cleanData: any = {};
+    Object.keys(data).forEach((key) => {
+      const val = (data as any)[key];
+      if (val !== undefined) {
+        cleanData[key] = val;
+      }
+    });
+
+    await setDoc(docRef, cleanData, { merge: true });
   } catch (error) {
-    console.error("Error saving transfer to Firestore:", error);
+    console.error("Critical error saving transfer to Firestore:", error);
   }
 }
 
@@ -266,5 +276,80 @@ export async function saveBalanceToDb(balance: number): Promise<void> {
     await setDoc(docRef, { balance }, { merge: true });
   } catch (error) {
     console.error("Error saving balance:", error);
+  }
+}
+
+// ---------------- CLIENTS (FLASHCOMPTE PRO) ----------------
+const CLIENTS_COL = 'clients';
+
+export async function saveClientToDb(client: Client): Promise<void> {
+  try {
+    const { uid, ...data } = client;
+    const docRef = doc(db, CLIENTS_COL, uid);
+    
+    const cleanData: any = { uid };
+    Object.keys(data).forEach((key) => {
+      const val = (data as any)[key];
+      if (val !== undefined) {
+        cleanData[key] = val;
+      }
+    });
+
+    await setDoc(docRef, cleanData, { merge: true });
+  } catch (error) {
+    console.error("Error saving client to Firestore:", error);
+    throw error;
+  }
+}
+
+export async function getClientsFromDb(): Promise<Client[]> {
+  try {
+    const querySnapshot = await getDocs(collection(db, CLIENTS_COL));
+    const items: Client[] = [];
+    querySnapshot.forEach((doc) => {
+      items.push({ uid: doc.id, ...doc.data() } as Client);
+    });
+    return items.sort((a, b) => b.createdAt - a.createdAt);
+  } catch (error) {
+    console.error("Error getting clients from Firestore:", error);
+    return [];
+  }
+}
+
+export async function getClientByUidFromDb(uid: string): Promise<Client | null> {
+  try {
+    const docRef = doc(db, CLIENTS_COL, uid);
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
+      return { uid: docSnap.id, ...docSnap.data() } as Client;
+    }
+    return null;
+  } catch (error) {
+    console.error("Error getting client by UID:", error);
+    return null;
+  }
+}
+
+export async function getClientByTokenFromDb(token: string): Promise<Client | null> {
+  try {
+    const q = query(collection(db, CLIENTS_COL), where("token", "==", token));
+    const querySnapshot = await getDocs(q);
+    if (!querySnapshot.empty) {
+      const d = querySnapshot.docs[0];
+      return { uid: d.id, ...d.data() } as Client;
+    }
+    return null;
+  } catch (error) {
+    console.error("Error getting client by token:", error);
+    return null;
+  }
+}
+
+export async function deleteClientFromDb(uid: string): Promise<void> {
+  try {
+    await deleteDoc(doc(db, CLIENTS_COL, uid));
+  } catch (error) {
+    console.error("Error deleting client:", error);
+    throw error;
   }
 }

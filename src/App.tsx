@@ -21,7 +21,9 @@ import HistoryPanel from './components/HistoryPanel';
 import SimulatedBankPortal from './components/SimulatedBankPortal';
 import AuthGate from './components/AuthGate';
 import LandingPage from './components/LandingPage';
-import { Contact, CampaignLog, PaymentTransaction, SimulatedTransfer } from './types';
+import ClientPortal from './components/ClientPortal';
+import AdminClientsManager from './components/AdminClientsManager';
+import { Contact, CampaignLog, PaymentTransaction, SimulatedTransfer, Client } from './types';
 import { 
   getTransfersFromDb, 
   saveTransferToDb, 
@@ -38,10 +40,12 @@ import {
   getTransferByIdFromDb,
   findTransferByAnyField,
   getTransfersByEmailFromDb,
+  saveClientToDb,
+  getClientByUidFromDb,
   db,
   auth
 } from './lib/firebase';
-import { onSnapshot, collection, doc } from 'firebase/firestore';
+import { onSnapshot, collection, doc, getDoc } from 'firebase/firestore';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 
 const getPublicOrigin = () => window.location.origin;
@@ -53,7 +57,11 @@ export default function App() {
   const [toast, setToast] = useState<string | null>(null);
   const [showLandingPage, setShowLandingPage] = useState<boolean>(() => {
     const searchParams = new URLSearchParams(window.location.search);
-    const hasClientQuery = searchParams.get('sid') || searchParams.get('c') || searchParams.get('portal');
+    const hasClientQuery = searchParams.get('sid') || 
+                           searchParams.get('c') || 
+                           searchParams.get('portal') || 
+                           searchParams.get('token') || 
+                           window.location.pathname.includes('/espace-client');
     return !hasClientQuery;
   });
   const [authGateTab, setAuthGateTab] = useState<'beneficiary' | 'admin'>('beneficiary');
@@ -66,8 +74,29 @@ export default function App() {
   const [userRole, setUserRole] = useState<'admin' | 'client' | null>(() => {
     return localStorage.getItem('user_role') as 'admin' | 'client' | null;
   });
+  const [clientProfile, setClientProfile] = useState<Client | null>(null);
   const [authLoading, setAuthLoading] = useState<boolean>(true);
   const [bypassAdmin, setBypassAdmin] = useState<boolean>(false);
+
+  // Sync client profile details in real-time if role is client
+  useEffect(() => {
+    if (!currentUser || userRole !== 'client') {
+      setClientProfile(null);
+      return;
+    }
+    const unsub = onSnapshot(doc(db, 'clients', currentUser.uid), (snap) => {
+      if (snap.exists()) {
+        const data = snap.data() as Client;
+        setClientProfile(data);
+        if (data.statut !== 'actif') {
+          alert("Votre compte FLASHCOMPTE PRO a été bloqué par un administrateur.");
+          signOut(auth);
+          handleLogout();
+        }
+      }
+    });
+    return () => unsub();
+  }, [currentUser, userRole]);
 
   // Subscribe to Firebase Authentication state change
   useEffect(() => {
@@ -81,23 +110,91 @@ export default function App() {
       setCurrentUser(user);
       if (user) {
         setShowLandingPage(false);
-        const savedRole = localStorage.getItem('user_role') as 'admin' | 'client' | null;
-        if (savedRole === 'client') {
-          setUserRole('client');
-          const matches = await getTransfersByEmailFromDb(user.email || '');
-          if (matches.length > 0) {
-            setLiveSimulationTx(matches[0]);
+        try {
+          const clientRef = doc(db, 'clients', user.uid);
+          const clientSnap = await getDoc(clientRef);
+          
+          if (clientSnap.exists()) {
+            const clientData = clientSnap.data() as Client;
+            
+            if (clientData.statut !== 'actif') {
+              alert("Votre compte FLASHCOMPTE PRO est bloqué.");
+              await signOut(auth);
+              handleLogout();
+              setAuthLoading(false);
+              return;
+            }
+
+            if (clientData.role === 'admin') {
+              setUserRole('admin');
+              localStorage.setItem('user_role', 'admin');
+            } else {
+              setUserRole('client');
+              localStorage.setItem('user_role', 'client');
+              
+              // Verify URL token if present
+              const urlToken = new URLSearchParams(window.location.search).get("token");
+              if (urlToken && clientData.token !== urlToken) {
+                alert("Accès refusé : Token de sécurité invalide.");
+                await signOut(auth);
+                handleLogout();
+                setAuthLoading(false);
+                return;
+              }
+
+              // Pre-load their first transfer matching email if any
+              const matches = await getTransfersByEmailFromDb(user.email || '');
+              if (matches.length > 0) {
+                setLiveSimulationTx(matches[0]);
+              }
+            }
+          } else {
+            // User exists in auth but no doc (legacy users or bootstrap admin sillyfr079@gmail.com)
+            const isEmailDefaultAdmin = user.email?.toLowerCase().trim() === 'sillyfr079@gmail.com';
+            
+            if (isEmailDefaultAdmin) {
+              const rootAdmin: Client = {
+                uid: user.uid,
+                email: user.email?.toLowerCase() || '',
+                codeClient: 'ADM001',
+                token: 'admin-token',
+                role: 'admin',
+                montant: 1850000,
+                statut: 'actif',
+                plan: 'vip',
+                createdAt: Date.now()
+              };
+              await saveClientToDb(rootAdmin);
+              setUserRole('admin');
+              localStorage.setItem('user_role', 'admin');
+            } else {
+              // Create default client doc so no one gets stuck
+              const clientCode = 'C' + Math.floor(100000 + Math.random() * 900000);
+              const clientToken = 'tk_' + Math.random().toString(36).substring(2, 10);
+              const defaultClient: Client = {
+                uid: user.uid,
+                email: user.email?.toLowerCase() || '',
+                codeClient: clientCode,
+                token: clientToken,
+                role: 'client',
+                montant: 0,
+                statut: 'actif',
+                plan: 'free',
+                createdAt: Date.now()
+              };
+              await saveClientToDb(defaultClient);
+              setUserRole('client');
+              localStorage.setItem('user_role', 'client');
+              
+              const matches = await getTransfersByEmailFromDb(user.email || '');
+              if (matches.length > 0) {
+                setLiveSimulationTx(matches[0]);
+              }
+            }
           }
-        } else if (savedRole === 'admin') {
-          setUserRole('admin');
-        } else {
-          // Default to client role
+        } catch (err) {
+          console.error("Firestore auth sync failed:", err);
           setUserRole('client');
-          localStorage.setItem('user_role', 'client');
-          const matches = await getTransfersByEmailFromDb(user.email || '');
-          if (matches.length > 0) {
-            setLiveSimulationTx(matches[0]);
-          }
         }
       } else {
         setUserRole(null);
@@ -233,6 +330,34 @@ export default function App() {
     };
   }, []);
 
+  // 1b. Automatic System Theme preference detection (Clair / Sombre)
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const handleThemeChange = (e: MediaQueryListEvent | MediaQueryList) => {
+      if (e.matches) {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+      }
+    };
+    
+    handleThemeChange(mediaQuery);
+    
+    if (mediaQuery.addEventListener) {
+      mediaQuery.addEventListener('change', handleThemeChange);
+    } else {
+      mediaQuery.addListener(handleThemeChange);
+    }
+    
+    return () => {
+      if (mediaQuery.removeEventListener) {
+        mediaQuery.removeEventListener('change', handleThemeChange);
+      } else {
+        mediaQuery.removeListener(handleThemeChange);
+      }
+    };
+  }, []);
+
   // 2. Direct load and verification of specific query parameters (device-agnostic)
   useEffect(() => {
     const getUrlParam = (paramName: string): string | null => {
@@ -319,7 +444,7 @@ export default function App() {
             otpCode: '',
             feePercent: 1.2,
             isCompleted: false,
-            generatedUrl: `${getPublicOrigin()}/?sid=${cParam}&connect=successful`
+            generatedUrl: `${getPublicOrigin()}/?sid=${cParam}`
           };
         }
 
@@ -446,7 +571,7 @@ export default function App() {
       id: txId,
       createdAt: new Date().toISOString(),
       isCompleted: false,
-      generatedUrl: `${getPublicOrigin()}/?sid=${shortCode}&connect=successful`
+      generatedUrl: `${getPublicOrigin()}/?sid=${shortCode}`
     };
 
     setTransfers(prev => [newTransfer, ...prev]);
@@ -594,7 +719,30 @@ export default function App() {
   // Handle Authentication Gate for operators and client logins
   const isOperatorAuthenticated = (currentUser !== null && userRole === 'admin') || bypassAdmin === true;
   
-  // STRICT SEPARATION OF CLIENT EXPERIENCE:
+  // SECURE CLIENT PORTAL (FLASHCOMPTE PRO)
+  // If authenticated as client: show their personalized workspace containing their balance, plans, code client in real-time
+  if (!isOperatorAuthenticated && currentUser !== null && userRole === 'client') {
+    return (
+      <ClientPortal 
+        clientUser={clientProfile || {
+          uid: currentUser.uid,
+          email: currentUser.email || '',
+          codeClient: 'C...',
+          token: '...',
+          role: 'client',
+          montant: 0,
+          statut: 'actif',
+          plan: 'free',
+          createdAt: Date.now()
+        }}
+        transfers={transfers}
+        onLaunchSimulation={(tx) => setLiveSimulationTx(tx)}
+        onLogout={handleLogout}
+      />
+    );
+  }
+
+  // STRICT SEPARATION OF CLIENT EXPERIENCE FOR GUESTS:
   // If we have an active client context (loaded transfer from URL parameters or selected client connection),
   // and they are NOT authenticated as an operator - then display ONLY the secure Bank Portal view.
   // This completely removes all unrequested backdrops, sidebars, dashboard information, and data of others.
@@ -613,6 +761,7 @@ export default function App() {
         onTriggerEmailNotification={onTriggerEmailNotification}
         isFirebaseAuthed={currentUser !== null && userRole === 'client'}
         firebaseSignOut={handleLogout}
+        isOperatorView={false}
       />
     );
   }
@@ -745,6 +894,12 @@ export default function App() {
             />
           )}
 
+          {activeTab === 'clients' && (
+            <AdminClientsManager 
+              onCreateToast={onCreateToast}
+            />
+          )}
+
           {activeTab === 'sms' && (
             <SmsCampaign 
               balance={balance} 
@@ -844,6 +999,7 @@ export default function App() {
           onTriggerEmailNotification={onTriggerEmailNotification}
           isFirebaseAuthed={currentUser !== null && userRole === 'client'}
           firebaseSignOut={handleLogout}
+          isOperatorView={true}
         />
       )}
 

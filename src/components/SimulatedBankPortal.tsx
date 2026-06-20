@@ -34,6 +34,7 @@ interface SimulatedBankPortalProps {
   onTriggerEmailNotification?: (title: string, content: string, status: 'Envoyé' | 'En attente' | 'Échoué') => void;
   isFirebaseAuthed?: boolean;
   firebaseSignOut?: () => void;
+  isOperatorView?: boolean;
 }
 
 interface SimulatedEmail {
@@ -52,16 +53,23 @@ export default function SimulatedBankPortal({
   onSetCompleted, 
   onTriggerEmailNotification,
   isFirebaseAuthed = false,
-  firebaseSignOut
+  firebaseSignOut,
+  isOperatorView = false
 }: SimulatedBankPortalProps) {
   
   // PRIMARY PORTAL NAVIGATION
   // Screens: 'LOGIN' | 'PORTAL_DASHBOARD'
   const [currentScreen, setCurrentScreen] = useState<'LOGIN' | 'PORTAL_DASHBOARD'>(() => {
-    // Auto-login to dashboard if the user clicks a unique link with sid, c, or connect parameters, or if they are already authenticated.
     const searchParams = new URLSearchParams(window.location.search);
-    const hasAuthorizedParam = searchParams.get('sid') || searchParams.get('c') || searchParams.get('connect') === 'successful';
-    return (hasAuthorizedParam || isFirebaseAuthed) ? 'PORTAL_DASHBOARD' : 'LOGIN';
+    const cameViaDirectLink = searchParams.get('sid') || searchParams.get('c');
+    
+    // If clicking a direct client access link, require login/credentials entry first
+    if (cameViaDirectLink) {
+      return 'LOGIN';
+    }
+    
+    // If they already authenticated via standard front-page AuthGate, skip double login
+    return 'PORTAL_DASHBOARD';
   });
   
   // Active tab in client workspace
@@ -475,14 +483,14 @@ export default function SimulatedBankPortal({
               >
                 ✖ Déconnexion
               </button>
-            ) : (
+            ) : isOperatorView ? (
               <button
                 onClick={onClose}
                 className="px-3.5 py-1.5 bg-rose-650 hover:bg-rose-700 text-white font-black text-xs rounded-xl flex items-center gap-1 cursor-pointer transition border border-rose-500/20"
               >
                 <ChevronLeft size={13} /> Espace Admin
               </button>
-            )}
+            ) : null}
           </div>
         </div>
 
@@ -613,7 +621,7 @@ export default function SimulatedBankPortal({
                         value={inputEmail}
                         onChange={(e) => setInputEmail(e.target.value)}
                         className="w-full bg-white px-4 py-3.5 text-xs sm:text-sm text-slate-800 font-medium focus:outline-none"
-                        placeholder=""
+                        placeholder="Adresse e-mail de connexion"
                       />
                     </div>
 
@@ -628,7 +636,7 @@ export default function SimulatedBankPortal({
                         value={inputPin}
                         onChange={(e) => setInputPin(e.target.value)}
                         className="w-full bg-white px-4 py-3.5 text-xs sm:text-sm text-slate-800 font-mono font-bold tracking-widest focus:outline-none"
-                        placeholder=""
+                        placeholder="Code d'accès PIN"
                       />
                       <button
                         type="button"

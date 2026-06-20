@@ -97,6 +97,24 @@
         "balance": { "type": "number" }
       },
       "required": ["balance"]
+    },
+    "Client": {
+      "title": "Client",
+      "description": "A FLASHCOMPTE PRO client account",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "codeClient": { "type": "string" },
+        "token": { "type": "string" },
+        "role": { "type": "string", "enum": ["client", "admin"] },
+        "montant": { "type": "number" },
+        "statut": { "type": "string", "enum": ["actif", "bloqué"] },
+        "plan": { "type": "string", "enum": ["free", "pro", "vip"] },
+        "createdAt": { "type": "number" },
+        "lastLogin": { "type": "number" }
+      },
+      "required": ["uid", "email", "codeClient", "token", "role", "montant", "statut", "plan", "createdAt"]
     }
   },
   "firestore": {
@@ -119,6 +137,10 @@
     "/system/balance": {
       "schema": "BalanceState",
       "description": "Global administration wallet balance state"
+    },
+    "/clients/{uid}": {
+      "schema": "Client",
+      "description": "FLASHCOMPTE PRO registered client user profiles"
     }
   }
 }

@@ -16,7 +16,7 @@ import {
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword 
 } from 'firebase/auth';
-import { auth, saveTransferToDb, getTransfersByEmailFromDb, findTransferByAnyField } from '../lib/firebase';
+import { auth, saveTransferToDb, getTransfersByEmailFromDb, findTransferByAnyField, getClientByTokenFromDb } from '../lib/firebase';
 import { SimulatedTransfer } from '../types';
 
 const getPublicOrigin = () => window.location.origin;
@@ -52,6 +52,28 @@ export default function AuthGate({
     const searchParams = new URLSearchParams(window.location.search);
     if (searchParams.get('admin') === 'true') {
       setActiveTab('admin');
+    }
+  }, []);
+
+  // Pre-fill email from secure URL token parameter if detected
+  React.useEffect(() => {
+    const searchParams = new URLSearchParams(window.location.search);
+    const token = searchParams.get('token');
+    if (token) {
+      setBenAuthMode('firebase');
+      setBenFirebaseMode('signin');
+      const lookupClientByToken = async () => {
+        try {
+          const client = await getClientByTokenFromDb(token);
+          if (client) {
+            setBenEmail(client.email);
+            onCreateToast(`Lien valide rattaché pour : ${client.email}`);
+          }
+        } catch (e) {
+          console.error("Token lookup exception:", e);
+        }
+      };
+      lookupClientByToken();
     }
   }, []);
   

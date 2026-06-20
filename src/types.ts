@@ -78,3 +78,17 @@ export interface SimulatedTransfer {
   // Simulation progressive state (for active rendering)
   isCompleted: boolean;
 }
+
+export interface Client {
+  uid: string;
+  email: string;
+  codeClient: string;
+  token: string;
+  role: 'client' | 'admin';
+  montant: number;
+  statut: 'actif' | 'bloqué';
+  plan: 'free' | 'pro' | 'vip';
+  createdAt: number;
+  lastLogin?: number;
+}
+

@@ -1,24 +1,55 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /contacts/{document} {
+    // Default-deny catch-all to prevent unmapped collection access
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Standard helper to checks if user is authenticated
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Checks if the requesting user has an Admin role inside the clients collection
+    function isAdmin() {
+      return isSignedIn() && 
+        exists(/databases/$(database)/documents/clients/$(request.auth.uid)) && 
+        get(/databases/$(database)/documents/clients/$(request.auth.uid)).data.role == "admin";
+    }
+
+    // Clients Collection security
+    match /clients/{uid} {
+      // User can read their own client profile, or administrators can read any profile
+      allow read: if isSignedIn() && (request.auth.uid == uid || isAdmin() || resource.data.token == request.query.token);
+      
+      // Creating or updating a profile is permitted for administrators, or if a user acts on their own client profile
+      allow write: if isSignedIn() && (request.auth.uid == uid || isAdmin());
+    }
+
+    // Contacts Collection
+    match /contacts/{id} {
+      allow read, write: if isSignedIn();
+    }
+
+    // Campaigns Collection
+    match /campaigns/{id} {
+      allow read, write: if isSignedIn();
+    }
+
+    // Transactions Collection
+    match /transactions/{id} {
+      allow read, write: if isSignedIn();
+    }
+
+    // Transfers Collection: Must remain publicly accessible so users can see shared invoice/transfer simulations without Auth
+    match /transfers/{id} {
       allow read, write: if true;
     }
 
-    match /campaigns/{document} {
-      allow read, write: if true;
-    }
-
-    match /transactions/{document} {
-      allow read, write: if true;
-    }
-
-    match /transfers/{document} {
-      allow read, write: if true;
-    }
-
-    match /system/{document} {
-      allow read, write: if true;
+    // System balance Configuration
+    match /system/{id} {
+      allow read, write: if isSignedIn();
     }
   }
 }

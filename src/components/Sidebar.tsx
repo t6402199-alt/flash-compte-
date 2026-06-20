@@ -32,6 +32,7 @@ export default function Sidebar({
 
   const menuItems = [
     { id: 'dashboard', label: 'Tableau de bord', icon: LayoutDashboard, category: 'GÉNÉRAL' },
+    { id: 'clients', label: 'Gestion Clients (SaaS)', icon: Users, category: 'GÉNÉRAL' },
     { id: 'sms', label: 'SMS Marketing', icon: MessageSquare, category: 'MARKETING' },
     { id: 'email', label: 'Email Marketing', icon: Mail, category: 'MARKETING' },
     { id: 'contacts', label: 'Gestion Contacts', icon: Users, category: 'MARKETING' },
