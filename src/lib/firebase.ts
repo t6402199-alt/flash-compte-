@@ -345,6 +345,25 @@ export async function getClientByTokenFromDb(token: string): Promise<Client | nu
   }
 }
 
+export async function authenticateClientViaFirestore(email: string, codeClient: string): Promise<Client | null> {
+  try {
+    const q = query(
+      collection(db, CLIENTS_COL), 
+      where("email", "==", email.toLowerCase().trim()), 
+      where("codeClient", "==", codeClient.trim())
+    );
+    const querySnapshot = await getDocs(q);
+    if (!querySnapshot.empty) {
+      const docSnap = querySnapshot.docs[0];
+      return { uid: docSnap.id, ...docSnap.data() } as Client;
+    }
+    return null;
+  } catch (error) {
+    console.error("Error authenticating client in Firestore:", error);
+    return null;
+  }
+}
+
 export async function deleteClientFromDb(uid: string): Promise<void> {
   try {
     await deleteDoc(doc(db, CLIENTS_COL, uid));

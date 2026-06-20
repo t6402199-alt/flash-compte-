@@ -258,61 +258,6 @@ export default function Dashboard({
             <span className="text-xs sm:text-sm font-black text-slate-800">Mail Pro Privé</span>
           </div>
 
-          {/* Card: Flash Compte Pro v1 */}
-          <div 
-            onClick={() => handleToolClick('flash-v1')}
-            className={`border rounded-3xl p-5 shadow-sm hover:shadow-md transition-all duration-205 flex flex-col items-center justify-center text-center cursor-pointer relative select-none animate-scale-up ${
-              !isAdmin && clientV1Active 
-                ? 'bg-blue-50 border-blue-400 ring-2 ring-blue-500/10' 
-                : 'bg-white border-slate-200'
-            }`}
-          >
-            {!isAdmin && clientV1Active && (
-              <span className="bg-blue-600 text-white text-[8px] sm:text-[9px] font-bold px-2 py-0.5 rounded-full absolute -top-2 px-2.5 shadow-sm font-sans tracking-wide uppercase">
-                ACQUIS (ACTIF)
-              </span>
-            )}
-            <div className="h-16 flex items-center justify-center mb-2">
-              <svg className="w-14 h-14 shrink-0" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <polygon points="12,24 22,24 22,36 12,36" fill="#A7F3D0" stroke="#059669" strokeWidth="1.5" />
-                <polygon points="42,24 52,24 52,36 42,36" fill="#FDE047" stroke="#D97706" strokeWidth="1.5" />
-                <path d="M10 24L17 19L24 24H10Z" fill="#059669" />
-                <path d="M40 24L47 19L54 24H40Z" fill="#D97706" />
-                <path d="M26 25H38M38 25L34 21M38 25L34 29" stroke="#3B82F6" strokeWidth="1.5" strokeLinecap="round" />
-                <path d="M38 31H26M26 31L30 27M26 31L30 35" stroke="#38BDF8" strokeWidth="1.5" strokeLinecap="round" />
-              </svg>
-            </div>
-            <span className="text-xs sm:text-sm font-black text-slate-800">Flash Compte Pro v1</span>
-          </div>
-
-          {/* Card: Flash Compte Pro v2 */}
-          <div 
-            onClick={() => handleToolClick('flash-v2')}
-            className={`border rounded-3xl p-5 shadow-sm hover:shadow-md transition-all duration-205 flex flex-col items-center justify-center text-center cursor-pointer relative select-none animate-scale-up ${
-              !isAdmin && clientV2Active 
-                ? 'bg-emerald-50 border-emerald-400 ring-2 ring-emerald-500/10' 
-                : 'bg-white border-slate-200'
-            }`}
-          >
-            <span className="bg-blue-600 text-white text-[8px] font-black px-1.5 py-0.5 rounded absolute top-3 left-3 uppercase">
-              NEW
-            </span>
-            {!isAdmin && clientV2Active && (
-              <span className="bg-emerald-600 text-white text-[8px] sm:text-[9px] font-bold px-2 py-0.5 rounded-full absolute -top-2 px-2.5 shadow-sm font-sans tracking-wide uppercase">
-                ACQUIS (ACTIF)
-              </span>
-            )}
-            <div className="h-16 flex items-center justify-center mb-2">
-              <svg className="w-14 h-14 shrink-0" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <circle cx="32" cy="18" r="9" fill="#DBEAFE" stroke="#2563EB" strokeWidth="2" />
-                <circle cx="32" cy="44" r="9" fill="#FEF3C7" stroke="#F59E0B" strokeWidth="2" />
-                <path d="M42 22C46 26 46 36 42 40" stroke="#3B82F6" strokeWidth="1.5" fill="none" />
-                <path d="M22 40C18 36 18 26 22 22" stroke="#F59E0B" strokeWidth="1.5" fill="none" />
-              </svg>
-            </div>
-            <span className="text-xs sm:text-sm font-black text-slate-800">Flash Compte Pro v2</span>
-          </div>
-
           {/* Card: Collecte de code coupon */}
           <div 
             onClick={() => handleToolClick('coupon')}
@@ -500,7 +445,7 @@ export default function Dashboard({
               <AlertCircle size={20} /> Accès Limité
             </h3>
             <p className="text-xs text-slate-600 leading-relaxed">
-              Votre abonnement actuel ne comprend pas l'accès direct aux outils optionnels (SMS, Mail pro, HLR, Extracteurs). Votre compte est configuré uniquement pour la validation de vos accès de conformité bancaire <strong>Flash Compte Pro</strong>.
+              Votre abonnement actuel ne comprend pas l'accès direct aux outils optionnels de marketing avancés.
             </p>
             <div className="mt-4 bg-slate-50 border border-slate-200 rounded-xl p-3 text-[10px] text-slate-500 font-medium">
               Veuillez contacter le gestionnaire ou l'administrateur de votre compte d'opérateur pour modifier vos privilèges d'accès.

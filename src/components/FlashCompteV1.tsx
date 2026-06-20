@@ -773,6 +773,19 @@ export default function FlashCompteV1({
               <span>🔗 <strong>Hash du lien :</strong> {createdTx.id.replace('tx-', '')}</span>
             </div>
 
+            {/* IMPORTANT WARNING ABOUT 403 GOOGLE ERROR */}
+            <div className="mb-4 bg-amber-50 border border-amber-200 rounded-2xl p-4 text-xs text-amber-800 space-y-1.5 shadow-sm">
+              <strong className="text-amber-900 font-bold flex items-center gap-1">
+                ⚠️ ATTENTION CONFORMITÉ ACCÈS :
+              </strong>
+              <p className="leading-relaxed">
+                Ne partagez <strong>JAMAIS</strong> l'URL de votre barre d'adresse de navigateur contenant <code className="bg-amber-100 px-1 py-0.5 rounded font-mono font-semibold">aistudio.google.com</code>. Ce lien appartient à votre console privée Google AI Studio et affichera une <strong>erreur Google 403</strong> pour vos clients.
+              </p>
+              <p className="leading-relaxed text-slate-700">
+                Partagez exclusivement le <strong>Lien de connexion client</strong> ci-dessous qui pointe vers votre URL publique et sécurisée.
+              </p>
+            </div>
+
             {/* Immersive Helper Grey Dialog Card from screenshot */}
             <div className="bg-slate-100 rounded-2xl p-4 text-xs text-slate-650 leading-relaxed space-y-3">
               <p>

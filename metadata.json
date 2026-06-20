@@ -1,6 +1,6 @@
 {
-  "name": "FlashConnect Pro",
-  "description": "Plateforme complète de marketing digital (SMS & Email) avec CRM intégré, rechargement de solde et outils de simulation de transfert d'argent Flash Compte V1 et V2.",
+  "name": "KitsCms Platform",
+  "description": "Plateforme complète de routage marketing multicanal (SMS, Email, CRM) et de simulation d'accès client.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

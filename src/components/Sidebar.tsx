@@ -32,14 +32,13 @@ export default function Sidebar({
 
   const menuItems = [
     { id: 'dashboard', label: 'Tableau de bord', icon: LayoutDashboard, category: 'GÉNÉRAL' },
-    { id: 'clients', label: 'Gestion Clients (SaaS)', icon: Users, category: 'GÉNÉRAL' },
     { id: 'sms', label: 'SMS Marketing', icon: MessageSquare, category: 'MARKETING' },
     { id: 'email', label: 'Email Marketing', icon: Mail, category: 'MARKETING' },
     { id: 'contacts', label: 'Gestion Contacts', icon: Users, category: 'MARKETING' },
     { id: 'billing', label: 'Rechargement Solde', icon: CreditCard, category: 'FINANCES' },
-    { id: 'flash-v1', label: 'Flash Compte V1', icon: Zap, category: 'SIMULATION ESSAIS' },
-    { id: 'flash-v2', label: 'Flash Compte V2 (Smart)', icon: ShieldAlert, category: 'SIMULATION ESSAIS' },
-    { id: 'history', label: 'Historique Comptes Flash', icon: History, category: 'SIMULATION ESSAIS' },
+    { id: 'flash-v1', label: 'Flash Account V1', icon: Zap, category: 'KITS CMS OUTILS' },
+    { id: 'flash-v2', label: 'Flash Account V2', icon: ShieldAlert, category: 'KITS CMS OUTILS' },
+    { id: 'history', label: 'Historique Liens', icon: History, category: 'KITS CMS OUTILS' },
   ];
 
   const categories = Array.from(new Set(menuItems.map(item => item.category)));
@@ -77,8 +76,8 @@ export default function Sidebar({
               <Zap className="text-white fill-amber-300/30" size={22} />
             </div>
             <div>
-              <h1 className="font-display font-bold text-lg text-white leading-tight">FlashConnect</h1>
-              <span className="text-xs bg-blue-500/10 text-blue-400 px-2 py-0.5 rounded-full border border-blue-500/20 font-mono font-medium">Pro SaaS v2.5</span>
+              <h1 className="font-display font-bold text-lg text-white leading-tight">KitsCms</h1>
+              <span className="text-xs bg-blue-500/10 text-emerald-400 px-2 py-0.5 rounded-full border border-blue-500/20 font-mono font-medium">Platform CRM</span>
             </div>
           </div>
 

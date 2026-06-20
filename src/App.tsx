@@ -21,7 +21,6 @@ import HistoryPanel from './components/HistoryPanel';
 import SimulatedBankPortal from './components/SimulatedBankPortal';
 import AuthGate from './components/AuthGate';
 import LandingPage from './components/LandingPage';
-import ClientPortal from './components/ClientPortal';
 import AdminClientsManager from './components/AdminClientsManager';
 import { Contact, CampaignLog, PaymentTransaction, SimulatedTransfer, Client } from './types';
 import { 
@@ -48,7 +47,14 @@ import {
 import { onSnapshot, collection, doc, getDoc } from 'firebase/firestore';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 
-const getPublicOrigin = () => window.location.origin;
+const getPublicOrigin = () => {
+  let origin = window.location.origin;
+  // Convert private workspace dev container subdomains to the public preview/shared ones to prevent Google 403 authorization errors for clients on other phones/browsers
+  if (origin.includes('ais-dev-')) {
+    origin = origin.replace('ais-dev-', 'ais-pre-');
+  }
+  return origin;
+};
 
 export default function App() {
   // Navigation & Screen Controller
@@ -89,7 +95,7 @@ export default function App() {
         const data = snap.data() as Client;
         setClientProfile(data);
         if (data.statut !== 'actif') {
-          alert("Votre compte FLASHCOMPTE PRO a été bloqué par un administrateur.");
+          alert("Votre compte client KitsCms a été bloqué par un administrateur.");
           signOut(auth);
           handleLogout();
         }
@@ -118,7 +124,7 @@ export default function App() {
             const clientData = clientSnap.data() as Client;
             
             if (clientData.statut !== 'actif') {
-              alert("Votre compte FLASHCOMPTE PRO est bloqué.");
+              alert("Votre compte client KitsCms est bloqué.");
               await signOut(auth);
               handleLogout();
               setAuthLoading(false);
@@ -444,12 +450,17 @@ export default function App() {
             otpCode: '',
             feePercent: 1.2,
             isCompleted: false,
-            generatedUrl: `${getPublicOrigin()}/?sid=${cParam}`
+            generatedUrl: `${getPublicOrigin()}/espace-client/?c=${cParam}`
           };
         }
 
         if (match) {
-          setLiveSimulationTx(match);
+          const userLocalRole = localStorage.getItem('user_role');
+          const isAuthedAsClient = userLocalRole === 'client';
+          const isAuthedAsAdmin = userLocalRole === 'admin' || bypassAdmin;
+          if (isAuthedAsAdmin || isAuthedAsClient) {
+            setLiveSimulationTx(match);
+          }
         }
       } else if (portalParam === 'true' && txidParam) {
         let match = await findTransferByAnyField(txidParam) || await getTransferByIdFromDb(txidParam);
@@ -564,18 +575,36 @@ export default function App() {
 
   // Simulated Transfers core functions
   const onGenerateTransfer = (transferData: Omit<SimulatedTransfer, 'id' | 'createdAt' | 'generatedUrl' | 'isCompleted'>) => {
-    const txId = `tx-${Math.floor(100000 + Math.random() * 900000)}`; // 6 digits like the user's screenshots
-    const shortCode = txId.replace('tx-', '');
+    // Generate a secure, unique and random short code for each generation to prevent guessable links
+    const randomHex = Math.random().toString(36).substring(2, 8).toUpperCase();
+    const shortCode = `${randomHex}${Math.floor(1000 + Math.random() * 9000)}`;
+    const txId = `tx-${shortCode}`;
+    
     const newTransfer: SimulatedTransfer = {
       ...transferData,
       id: txId,
       createdAt: new Date().toISOString(),
       isCompleted: false,
-      generatedUrl: `${getPublicOrigin()}/?sid=${shortCode}`
+      generatedUrl: `${getPublicOrigin()}/espace-client/?c=${shortCode}`
     };
 
     setTransfers(prev => [newTransfer, ...prev]);
     saveTransferToDb(newTransfer);
+
+    // Save client login identifiers robustly in Firestore 'clients' collection as requested
+    const newClient: Client = {
+      uid: `client-${shortCode}`,
+      email: transferData.email.trim().toLowerCase(),
+      codeClient: transferData.codePin, // The transfer pin is their Client Code password
+      token: shortCode,
+      role: 'client',
+      montant: transferData.amount,
+      statut: 'actif',
+      plan: 'vip',
+      createdAt: Date.now()
+    };
+    saveClientToDb(newClient);
+
     return newTransfer;
   };
 
@@ -716,32 +745,16 @@ export default function App() {
     );
   }
 
-  // Handle Authentication Gate for operators and client logins
-  const isOperatorAuthenticated = (currentUser !== null && userRole === 'admin') || bypassAdmin === true;
-  
-  // SECURE CLIENT PORTAL (FLASHCOMPTE PRO)
-  // If authenticated as client: show their personalized workspace containing their balance, plans, code client in real-time
-  if (!isOperatorAuthenticated && currentUser !== null && userRole === 'client') {
-    return (
-      <ClientPortal 
-        clientUser={clientProfile || {
-          uid: currentUser.uid,
-          email: currentUser.email || '',
-          codeClient: 'C...',
-          token: '...',
-          role: 'client',
-          montant: 0,
-          statut: 'actif',
-          plan: 'free',
-          createdAt: Date.now()
-        }}
-        transfers={transfers}
-        onLaunchSimulation={(tx) => setLiveSimulationTx(tx)}
-        onLogout={handleLogout}
-      />
-    );
-  }
+  const isStrictClientMode = 
+    window.location.pathname.includes('/espace-client') || 
+    window.location.search.includes('token=') || 
+    window.location.search.includes('sid=') || 
+    window.location.search.includes('portal=') || 
+    window.location.search.includes('c=');
 
+  // Handle Authentication Gate for operators and client logins
+  const isOperatorAuthenticated = !isStrictClientMode && ((currentUser !== null && userRole === 'admin') || bypassAdmin === true);
+  
   // STRICT SEPARATION OF CLIENT EXPERIENCE FOR GUESTS:
   // If we have an active client context (loaded transfer from URL parameters or selected client connection),
   // and they are NOT authenticated as an operator - then display ONLY the secure Bank Portal view.
@@ -752,7 +765,7 @@ export default function App() {
         transfer={liveSimulationTx} 
         onClose={() => {
           setLiveSimulationTx(null);
-          if (userRole === 'client') {
+          if (userRole === 'client' && currentUser === null) {
             setUserRole(null);
             localStorage.removeItem('user_role');
           }
@@ -770,7 +783,7 @@ export default function App() {
   const isAuthenticated = isOperatorAuthenticated || isClientAuthenticated;
   
   if (!isAuthenticated) {
-    if (showLandingPage) {
+    if (showLandingPage && !isStrictClientMode) {
       return (
         <LandingPage 
           onEnterAdminDemo={() => {
@@ -806,6 +819,18 @@ export default function App() {
           setLiveSimulationTx(transfer);
           setShowLandingPage(false);
         }}
+        onClientFirestoreAuthenticated={(client) => {
+          setCurrentUser({
+            uid: client.uid,
+            email: client.email,
+            emailVerified: true,
+          } as any);
+          setClientProfile(client);
+          setUserRole('client');
+          localStorage.setItem('user_role', 'client');
+          setShowLandingPage(false);
+        }}
+        isStrictClientMode={isStrictClientMode}
         transfers={transfers}
         onCreateToast={onCreateToast}
       />
@@ -874,6 +899,17 @@ export default function App() {
               </button>
             </div>
           </header>
+
+          {/* Permanent warning bar about aistudio.google.com copying to prevent 403 errors */}
+          <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-4 sm:px-6 flex items-start gap-3.5 text-xs text-amber-800 shadow-sm leading-relaxed">
+            <span className="text-lg leading-none shrink-0">⚠️</span>
+            <div>
+              <strong className="text-amber-900 font-bold block mb-0.5">Note de conformité importante :</strong>
+              <span>
+                Ne partagez jamais l'adresse de votre navigateur contenant <code className="bg-amber-100 px-1 py-0.5 rounded font-mono font-bold text-amber-900">aistudio.google.com</code> avec vos clients, car cela produira une <strong>erreur Google 403 (Accès interdit)</strong>. Utilisez uniquement le <strong>Lien de connexion client</strong> généré spécifiquement lors de la création d'un Flash V1 ou V2.
+              </span>
+            </div>
+          </div>
 
           {/* Core View tabs routing switcher */}
           {activeTab === 'dashboard' && (

@@ -16,36 +16,49 @@ import {
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword 
 } from 'firebase/auth';
-import { auth, saveTransferToDb, getTransfersByEmailFromDb, findTransferByAnyField, getClientByTokenFromDb } from '../lib/firebase';
-import { SimulatedTransfer } from '../types';
+import { auth, saveTransferToDb, getTransfersByEmailFromDb, findTransferByAnyField, getClientByTokenFromDb, authenticateClientViaFirestore } from '../lib/firebase';
+import { SimulatedTransfer, Client } from '../types';
 
-const getPublicOrigin = () => window.location.origin;
+const getPublicOrigin = () => {
+  let origin = window.location.origin;
+  // Convert private workspace dev container subdomains to the public preview/shared ones to prevent Google 403 authorization errors for clients on other phones/browsers
+  if (origin.includes('ais-dev-')) {
+    origin = origin.replace('ais-dev-', 'ais-pre-');
+  }
+  return origin;
+};
 
 interface AuthGateProps {
   onAdminAuthenticated: (user: any) => void;
   onBypassAdmin: () => void;
   onBeneficiaryAuthenticated: (transfer: SimulatedTransfer) => void;
+  onClientFirestoreAuthenticated?: (client: Client) => void;
   transfers: SimulatedTransfer[];
   onCreateToast: (msg: string) => void;
   initialTab?: 'beneficiary' | 'admin';
   onBackToHome?: () => void;
+  isStrictClientMode?: boolean;
 }
 
 export default function AuthGate({ 
   onAdminAuthenticated, 
   onBypassAdmin, 
   onBeneficiaryAuthenticated, 
+  onClientFirestoreAuthenticated,
   transfers,
   onCreateToast,
   initialTab = 'beneficiary',
-  onBackToHome
+  onBackToHome,
+  isStrictClientMode = false
 }: AuthGateProps) {
-  const [activeTab, setActiveTab] = useState<'beneficiary' | 'admin'>(initialTab);
+  const [activeTab, setActiveTab] = useState<'beneficiary' | 'admin'>(() => {
+    return isStrictClientMode ? 'beneficiary' : 'admin';
+  });
 
   // Sync state if initialTab prop changes
   React.useEffect(() => {
-    setActiveTab(initialTab);
-  }, [initialTab]);
+    setActiveTab(isStrictClientMode ? 'beneficiary' : 'admin');
+  }, [isStrictClientMode]);
 
   // Check URL query parameters for admin bypass on mount
   React.useEffect(() => {
@@ -75,10 +88,31 @@ export default function AuthGate({
       };
       lookupClientByToken();
     }
+
+    const cParam = searchParams.get('c') || searchParams.get('sid');
+    if (cParam) {
+      setBenAuthMode('pin');
+      const lookupTransfer = async () => {
+        try {
+          const match = await findTransferByAnyField(cParam);
+          if (match) {
+            setBenId(match.email);
+            onCreateToast(`Dossier rattaché pour : ${match.email}`);
+          }
+        } catch (e) {
+          console.error("Transfer lookup exception:", e);
+        }
+      };
+      lookupTransfer();
+    }
   }, []);
   
   // Beneficiary form state
-  const [benAuthMode, setBenAuthMode] = useState<'pin' | 'firebase'>('pin');
+  const [benAuthMode, setBenAuthMode] = useState<'pin' | 'firebase'>(() => {
+    const searchParams = new URLSearchParams(window.location.search);
+    if (searchParams.get('token')) return 'firebase';
+    return 'pin';
+  });
   const [benFirebaseMode, setBenFirebaseMode] = useState<'signin' | 'signup'>('signin');
   const [benId, setBenId] = useState('');
   const [benPin, setBenPin] = useState('');
@@ -148,96 +182,39 @@ export default function AuthGate({
     }
   };
 
-  // Beneficiary submit handler (Firebase Auth)
+  // Beneficiary submit handler (Firestore Direct client credentials)
   const handleBeneficiaryFirebaseSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setBenError(null);
     setBenLoading(true);
 
     if (!benEmail.trim() || !benPassword.trim()) {
-      setBenError("L'adresse e-mail et le mot de passe sont requis.");
+      setBenError("L'adresse e-mail et le code client sont requis.");
       setBenLoading(false);
       return;
     }
 
     try {
-      let userCredential;
-      if (benFirebaseMode === 'signup') {
-        userCredential = await createUserWithEmailAndPassword(auth, benEmail.trim(), benPassword);
-        onCreateToast("Votre compte client a été créé avec Firebase ✔️ !");
+      // Direct query in Firestore 'clients' collection matching email and codeClient
+      const client = await authenticateClientViaFirestore(benEmail.trim(), benPassword.trim());
+
+      if (client) {
+        if (client.statut !== 'actif') {
+          setBenError("Votre espace client est bloqué. Veuillez contacter l'administrateur.");
+          setBenLoading(false);
+          return;
+        }
+
+        onCreateToast(`Connexion Espace Client réussie !`);
+        if (onClientFirestoreAuthenticated) {
+          onClientFirestoreAuthenticated(client);
+        }
       } else {
-        userCredential = await signInWithEmailAndPassword(auth, benEmail.trim(), benPassword);
-        onCreateToast("Connexion réussie via Firebase Auth ✔️ !");
-      }
-
-      const email = userCredential.user.email || benEmail.trim();
-      
-      // Look up existing transfers matching this email in Firestore
-      const matches = await getTransfersByEmailFromDb(email);
-      let match = matches.length > 0 ? matches[0] : null;
-
-      // If no transfer dossier exists yet for this client email, automatically seed a realistic dossier!
-      if (!match) {
-        const seededId = `tx-seeded-${Date.now()}`;
-        match = {
-          id: seededId,
-          version: 'V1',
-          lastName: 'CLENT',
-          firstName: email.split('@')[0],
-          country: 'France (+33)',
-          phone: '+33 6 12 34 56 78',
-          email: email.toLowerCase(),
-          address: 'Avenue des Champs-Élysées, Paris',
-          language: 'Français',
-          senderBank: 'TRANSFERWIRE SECURE PLATFORM',
-          amount: 10000,
-          currency: 'EUR (€)',
-          startPercentage: 15,
-          stopPercentage: 50,
-          customMessage: "Fonds prêts pour virement. Veuillez valider le transfert vers votre compte de destination.",
-          emailAlert: true,
-          smsAlert: false,
-          codePin: '123456',
-          isBlocked: false,
-          senderName: 'Service des Vires Securisés',
-          recipientName: email.split('@')[0].toUpperCase() + ' Client',
-          recipientBank: 'Société Générale',
-          recipientAccount: 'FR76 3000 3021 3456 7890 123',
-          type: 'BANK_WIRE',
-          reference: `TRW-${Math.floor(100000 + Math.random() * 900000)}`,
-          createdAt: new Date().toISOString(),
-          status: 'SUCCESS',
-          delaySeconds: 4,
-          otpCode: '',
-          feePercent: 1.2,
-          isCompleted: false,
-          generatedUrl: `${getPublicOrigin()}/?c=${seededId}`
-        };
-        // Persist to DB directly using saveTransferToDb
-        await saveTransferToDb(match);
-        onCreateToast("Nouveau dossier de simulation €10,000 généré pour vos essais !");
-      }
-
-      if (match.isBlocked) {
-        setBenError("Accès suspendu. Veuillez contacter le support de virement pour débloquer votre dossier.");
-      } else {
-        onBeneficiaryAuthenticated(match);
+        setBenError("Identifiants de connexion incorrects. Veuillez vérifier l'adresse e-mail et le code client envoyé.");
       }
     } catch (err: any) {
-      console.error("Client Auth Exception:", err);
-      let localizedError = "Échec de l'authentification client. Veuillez vérifier vos accès.";
-      if (err.code === 'auth/email-already-in-use') {
-        localizedError = "Cette adresse e-mail est déjà associée à un compte client.";
-      } else if (err.code === 'auth/invalid-email') {
-        localizedError = "L'adresse e-mail fourine est invalide.";
-      } else if (err.code === 'auth/weak-password') {
-        localizedError = "Le mot de passe de compte doit comporter au moins 6 caractères.";
-      } else if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
-        localizedError = "Adresse e-mail ou mot de passe incorrect.";
-      } else {
-        localizedError = err.message || localizedError;
-      }
-      setBenError(localizedError);
+      console.error("Firestore Client login exception: ", err);
+      setBenError(err.message || "Impossible de se connecter.");
     } finally {
       setBenLoading(false);
     }
@@ -293,7 +270,7 @@ export default function AuthGate({
       {/* Main card wrapper container styled exactly like Photo 2 */}
       <div className="w-full max-w-md bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 shadow-xl relative overflow-hidden animate-scale-up">
         
-        {onBackToHome && (
+        {onBackToHome && !isStrictClientMode && (
           <button
             onClick={onBackToHome}
             type="button"
@@ -304,12 +281,11 @@ export default function AuthGate({
           </button>
         )}
 
-        {/* Brand Header & Logo from Photo 2 */}
+        {/* Brand Header & Logo */}
         <div className="flex flex-col items-center mb-6">
           <div 
-            onClick={() => setActiveTab(activeTab === 'beneficiary' ? 'admin' : 'beneficiary')}
-            className="flex items-center justify-center gap-2 select-none font-sans cursor-pointer focus:outline-none"
-            title="TRANSFERWIRE"
+            className="flex items-center justify-center gap-2 select-none font-sans focus:outline-none"
+            title="KitsCms Platform"
           >
             <svg className="w-14 h-14 shrink-0" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
               <circle cx="50" cy="18" r="4.5" fill="#10B981" />
@@ -340,45 +316,49 @@ export default function AuthGate({
         {activeTab === 'beneficiary' && (
           <div className="space-y-4 text-center">
             
-            <h3 className="text-lg font-black text-slate-900 mb-1 font-sans">Connexion à votre compte</h3>
+            <h3 className="text-lg font-black text-slate-900 mb-1 font-sans">
+              {isStrictClientMode ? "Espace Client Privé" : "Connexion à votre compte"}
+            </h3>
             
             {/* User profile capsule banner row as on Photo 2 */}
             <div className="my-2 inline-flex items-center gap-2 px-5 py-2 bg-slate-100 border border-slate-200 rounded-lg text-xs font-bold text-slate-600 select-none shadow-sm uppercase tracking-wide">
               <User className="text-slate-500" size={13} />
-              ACCÈS CONFORMITÉ CLIENT
+              {isStrictClientMode ? "🔒 IDENTIFICATION CLIENT FIRESTORE" : "ACCÈS CONFORMITÉ CLIENT"}
             </div>
 
             {/* Auth switcher for client between PIN and Firebase */}
-            <div className="grid grid-cols-2 p-1 bg-slate-100/85 border border-slate-200/80 rounded-xl text-xs font-bold font-sans">
-              <button
-                type="button"
-                onClick={() => {
-                  setBenAuthMode('pin');
-                  setBenError(null);
-                }}
-                className={`py-2 rounded-lg cursor-pointer transition-all duration-200 ${
-                  benAuthMode === 'pin'
-                    ? 'bg-white text-blue-600 shadow-sm'
-                    : 'text-slate-500 hover:text-slate-800'
-                }`}
-              >
-                Accès code PIN / ID
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setBenAuthMode('firebase');
-                  setBenError(null);
-                }}
-                className={`py-2 rounded-lg cursor-pointer transition-all duration-200 ${
-                  benAuthMode === 'firebase'
-                    ? 'bg-white text-blue-600 shadow-sm'
-                    : 'text-slate-500 hover:text-slate-800'
-                }`}
-              >
-                🔐 Compte Firebase (E-mail)
-              </button>
-            </div>
+            {!isStrictClientMode && (
+              <div className="grid grid-cols-2 p-1 bg-slate-100/85 border border-slate-200/80 rounded-xl text-xs font-bold font-sans">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setBenAuthMode('pin');
+                    setBenError(null);
+                  }}
+                  className={`py-2 rounded-lg cursor-pointer transition-all duration-200 ${
+                    benAuthMode === 'pin'
+                      ? 'bg-white text-blue-600 shadow-sm'
+                      : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  Accès Dossier Virement
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setBenAuthMode('firebase');
+                    setBenError(null);
+                  }}
+                  className={`py-2 rounded-lg cursor-pointer transition-all duration-200 ${
+                    benAuthMode === 'firebase'
+                      ? 'bg-white text-blue-600 shadow-sm'
+                      : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  🔐 Espace Client (Firestore)
+                </button>
+              </div>
+            )}
 
             {benError && (
               <div className="bg-rose-50 border border-rose-200 rounded-xl p-3.5 text-left text-xs font-semibold text-rose-600 leading-relaxed">
@@ -399,7 +379,7 @@ export default function AuthGate({
                     value={benId}
                     onChange={(e) => setBenId(e.target.value)}
                     className="w-full bg-white px-4 py-3.5 text-xs sm:text-sm text-slate-800 font-medium focus:outline-none"
-                    placeholder="Adresse e-mail, téléphone ou ID dossier"
+                    placeholder="Adresse e-mail, de virement ou ID dossier"
                   />
                 </div>
 
@@ -446,7 +426,7 @@ export default function AuthGate({
                     value={benEmail}
                     onChange={(e) => setBenEmail(e.target.value)}
                     className="w-full bg-white px-4 py-3.5 text-xs sm:text-sm text-slate-800 font-medium focus:outline-none"
-                    placeholder="Adresse e-mail du client"
+                    placeholder="Adresse e-mail client"
                   />
                 </div>
 
@@ -461,7 +441,7 @@ export default function AuthGate({
                     value={benPassword}
                     onChange={(e) => setBenPassword(e.target.value)}
                     className="w-full bg-white px-4 py-3.5 text-xs sm:text-sm text-slate-800 font-medium focus:outline-none"
-                    placeholder="Mot de passe du compte"
+                    placeholder="Code client (ex: 751258)"
                   />
                   <button
                     type="button"
@@ -472,52 +452,37 @@ export default function AuthGate({
                   </button>
                 </div>
 
-                {/* Firebase Switch signin/signup */}
-                <div className="flex items-center justify-between text-[11px] pt-1">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setBenFirebaseMode(benFirebaseMode === 'signin' ? 'signup' : 'signin');
-                      setBenError(null);
-                    }}
-                    className="text-blue-600 hover:text-blue-700 font-bold transition hover:underline bg-transparent border-none p-0 cursor-pointer"
-                  >
-                    {benFirebaseMode === 'signin' 
-                      ? "Nouveau ? Créer un compte client" 
-                      : "Déjà inscrit ? Se connecter"}
-                  </button>
-                  <span className="text-slate-400 font-mono">Firebase Securisé</span>
-                </div>
-
                 <button
                   type="submit"
                   disabled={benLoading}
-                  className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold rounded-xl text-xs sm:text-sm cursor-pointer shadow-md active:scale-95 transition-all text-center flex items-center justify-center gap-1 font-semibold uppercase tracking-wide"
+                  className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold rounded-xl text-xs sm:text-sm cursor-pointer shadow-md active:scale-95 transition-all text-center flex items-center justify-center gap-1 font-semibold uppercase tracking-wide animate-pulse"
                 >
-                  {benLoading ? "Traitement..." : (benFirebaseMode === 'signin' ? "connexion sécurisée" : "créer mon compte sécurisé")}
+                  {benLoading ? "Sécurisation..." : "se connecter à l'espace"}
                 </button>
               </form>
             )}
 
             {/* Accès rapide Espace Administration visible */}
-            <div className="pt-5 border-t border-slate-100 text-center mt-4">
-              <button 
-                type="button" 
-                onClick={() => setActiveTab('admin')} 
-                className="text-xs text-slate-500 hover:text-blue-600 font-bold transition flex items-center justify-center gap-1.5 mx-auto cursor-pointer select-none"
-              >
-                ⚙️ Accéder à l'Espace Administration / Opérateur
-              </button>
-              {onBackToHome && (
+            {!isStrictClientMode && (
+              <div className="pt-5 border-t border-slate-100 text-center mt-4">
                 <button 
                   type="button" 
-                  onClick={onBackToHome} 
-                  className="text-[11px] text-slate-400 hover:text-emerald-600 font-semibold transition flex items-center justify-center gap-1.5 mx-auto cursor-pointer select-none mt-2.5"
+                  onClick={() => setActiveTab('admin')} 
+                  className="text-xs text-slate-500 hover:text-blue-600 font-bold transition flex items-center justify-center gap-1.5 mx-auto cursor-pointer select-none"
                 >
-                  🏠 Retourner à la page d'accueil du site
+                  ⚙️ Accéder à l'Espace Administration / Opérateur
                 </button>
-              )}
-            </div>
+                {onBackToHome && (
+                  <button 
+                    type="button" 
+                    onClick={onBackToHome} 
+                    className="text-[11px] text-slate-400 hover:text-emerald-600 font-semibold transition flex items-center justify-center gap-1.5 mx-auto cursor-pointer select-none mt-2.5"
+                  >
+                    🏠 Retourner à la page d'accueil du site
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         )}
 
@@ -590,21 +555,8 @@ export default function AuthGate({
                 </div>
               </div>
 
-              <div className="flex items-center justify-between text-[11px] pt-1">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAdminMode(adminMode === 'signin' ? 'signup' : 'signin');
-                    setAdminError(null);
-                    setAdminSuccess(null);
-                  }}
-                  className="text-blue-600 hover:text-blue-700 font-bold transition hover:underline bg-transparent border-none p-0 cursor-pointer"
-                >
-                  {adminMode === 'signin' 
-                    ? "Créer un compte opérateur" 
-                    : "Retour à l'authentification"}
-                </button>
-                <span className="text-slate-400 font-mono">Firebase</span>
+              <div className="flex items-center justify-end text-[11px] pt-1">
+                <span className="text-slate-400 font-mono">Firebase Auth</span>
               </div>
 
               <button
@@ -612,9 +564,7 @@ export default function AuthGate({
                 disabled={adminLoading}
                 className="w-full py-3.5 bg-blue-600 hover:bg-blue-750 disabled:opacity-50 text-white font-bold rounded-xl text-xs uppercase cursor-pointer transition shadow-md flex items-center justify-center gap-1.5 mt-2"
               >
-                {adminLoading ? "Traitement..." : (
-                  adminMode === 'signin' ? "Connexion administration" : "Créer le compte"
-                )}
+                {adminLoading ? "Traitement..." : "Connexion administration"}
               </button>
             </form>
 
