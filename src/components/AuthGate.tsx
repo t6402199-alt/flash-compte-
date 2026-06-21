@@ -16,7 +16,7 @@ import {
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword 
 } from 'firebase/auth';
-import { auth, saveTransferToDb, getTransfersByEmailFromDb, findTransferByAnyField, getClientByTokenFromDb, authenticateClientViaFirestore } from '../lib/firebase';
+import { auth, saveTransferToDb, getTransfersByEmailFromDb, findTransferByAnyField, getClientByTokenFromDb, authenticateClientViaFirestore, saveClientToDb, getClientByUidFromDb } from '../lib/firebase';
 import { SimulatedTransfer, Client } from '../types';
 
 const getPublicOrigin = () => {
@@ -182,39 +182,95 @@ export default function AuthGate({
     }
   };
 
-  // Beneficiary submit handler (Firestore Direct client credentials)
+  // Beneficiary submit handler (Firestore & Auth client credentials/signup)
   const handleBeneficiaryFirebaseSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setBenError(null);
     setBenLoading(true);
 
     if (!benEmail.trim() || !benPassword.trim()) {
-      setBenError("L'adresse e-mail et le code client sont requis.");
+      setBenError("L'adresse e-mail et le mot de passe sont requis.");
       setBenLoading(false);
       return;
     }
 
     try {
-      // Direct query in Firestore 'clients' collection matching email and codeClient
-      const client = await authenticateClientViaFirestore(benEmail.trim(), benPassword.trim());
+      if (benFirebaseMode === 'signup') {
+        // --- 1. SIGN UP CLIENT ---
+        // Create user in Firebase Auth
+        const userCredential = await createUserWithEmailAndPassword(auth, benEmail.trim(), benPassword.trim());
+        const uid = userCredential.user.uid;
 
-      if (client) {
-        if (client.statut !== 'actif') {
-          setBenError("Votre espace client est bloqué. Veuillez contacter l'administrateur.");
-          setBenLoading(false);
-          return;
-        }
+        // Generate a random token and 1-year expiration date
+        const clientToken = 'tk_' + Math.random().toString(36).substring(2, 15);
+        const expirationDate = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toLocaleDateString('fr-FR');
 
-        onCreateToast(`Connexion Espace Client réussie !`);
+        // Store client document in collection 'clients' immediately
+        const newClient: Client = {
+          uid,
+          email: benEmail.trim().toLowerCase(),
+          codeClient: benPassword.trim(), // Choosen password functions as access client code
+          pin: benPassword.trim(),
+          token: clientToken,
+          role: 'client',
+          montant: 0,
+          statut: 'actif',
+          plan: 'free',
+          createdAt: Date.now(),
+          lastLogin: Date.now(),
+          dateExpiration: expirationDate
+        };
+
+        await saveClientToDb(newClient);
+
+        onCreateToast("Votre compte client a été créé avec succès !");
         if (onClientFirestoreAuthenticated) {
-          onClientFirestoreAuthenticated(client);
+          onClientFirestoreAuthenticated(newClient);
         }
       } else {
-        setBenError("Identifiants de connexion incorrects. Veuillez vérifier l'adresse e-mail et le code client envoyé.");
+        // --- 2. SIGN IN CLIENT ---
+        let clientDoc: Client | null = null;
+        
+        // Log in with standard Firebase Authentication on main instance
+        try {
+          const userCreds = await signInWithEmailAndPassword(auth, benEmail.trim(), benPassword.trim());
+          const uid = userCreds.user.uid;
+          clientDoc = await getClientByUidFromDb(uid);
+        } catch (authErr) {
+          console.log("Firebase Auth failed, trying direct Firestore codeClient login:", authErr);
+        }
+
+        // Fallback to direct Firestore collection credentials matching (very useful for legacy code pin accounts)
+        if (!clientDoc) {
+          clientDoc = await authenticateClientViaFirestore(benEmail.trim(), benPassword.trim());
+        }
+
+        if (clientDoc) {
+          if (clientDoc.statut !== 'actif') {
+            setBenError("Votre espace client est bloqué. Veuillez contacter l'administrateur.");
+            setBenLoading(false);
+            return;
+          }
+
+          onCreateToast(`Connexion Espace Client réussie !`);
+          if (onClientFirestoreAuthenticated) {
+            onClientFirestoreAuthenticated(clientDoc);
+          }
+        } else {
+          setBenError("Identifiants de connexion incorrects. Veuillez vérifier l'adresse e-mail et le mot de passe/code client.");
+        }
       }
     } catch (err: any) {
-      console.error("Firestore Client login exception: ", err);
-      setBenError(err.message || "Impossible de se connecter.");
+      console.error("Client login/signup exception: ", err);
+      let localizedError = err.message || "Une erreur est survenue lors de l'authentification.";
+      if (err.code === 'auth/email-already-in-use') {
+        localizedError = "Cette adresse e-mail est déjà associée à un compte client.";
+      } else if (err.code === 'auth/weak-password') {
+        localizedError = "Le mot de passe doit comporter au moins 6 caractères.";
+      } else if (err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password') {
+        localizedError = "Identifiants ou mot de passe incorrects.";
+      }
+      setBenError(localizedError);
     } finally {
       setBenLoading(false);
     }
@@ -236,6 +292,28 @@ export default function AuthGate({
     try {
       if (adminMode === 'signup') {
         const userCredential = await createUserWithEmailAndPassword(auth, adminEmail.trim(), adminPassword);
+        const uid = userCredential.user.uid;
+        
+        // Generate a random client token and 1-year expiration date
+        const clientToken = 'tk_' + Math.random().toString(36).substring(2, 15);
+        const expirationDate = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toLocaleDateString('fr-FR');
+        
+        const newAdminDoc: Client = {
+          uid,
+          email: adminEmail.trim().toLowerCase(),
+          token: clientToken,
+          codeClient: adminPassword.trim(), // Storing client access code password
+          pin: adminPassword.trim(),
+          statut: 'actif',
+          montant: 0,
+          dateExpiration: expirationDate,
+          createdAt: Date.now(),
+          role: 'admin',
+          plan: 'vip'
+        };
+        
+        await saveClientToDb(newAdminDoc);
+
         setAdminSuccess("Votre compte opérateur a été créé avec succès ✔️ ! Vous êtes maintenant connecté.");
         onCreateToast("Création de compte réussie !");
         setTimeout(() => {
@@ -415,6 +493,13 @@ export default function AuthGate({
               </form>
             ) : (
               <form onSubmit={handleBeneficiaryFirebaseSubmit} className="space-y-4 text-left">
+                {/* Title indicator of current Auth mode inside the Client tab */}
+                <div className="text-center pb-1">
+                  <span className="text-[11px] font-mono tracking-wider text-slate-400 font-bold uppercase">
+                    {benFirebaseMode === 'signin' ? "CONNEXION ESPACE CLIENT" : "INSCRIPTION NOUVEAU CLIENT"}
+                  </span>
+                </div>
+
                 {/* Firebase Email Input block */}
                 <div className="flex border border-slate-200 rounded-xl overflow-hidden focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500/50 transition bg-white shadow-sm">
                   <div className="bg-slate-50 border-r border-slate-200 px-4 py-3.5 flex items-center justify-center text-slate-400 shrink-0 select-none">
@@ -441,7 +526,7 @@ export default function AuthGate({
                     value={benPassword}
                     onChange={(e) => setBenPassword(e.target.value)}
                     className="w-full bg-white px-4 py-3.5 text-xs sm:text-sm text-slate-800 font-medium focus:outline-none"
-                    placeholder="Code client (ex: 751258)"
+                    placeholder={benFirebaseMode === 'signin' ? "Mot de passe ou Code client" : "Définir un mot de passe (min. 6 car.)"}
                   />
                   <button
                     type="button"
@@ -455,10 +540,26 @@ export default function AuthGate({
                 <button
                   type="submit"
                   disabled={benLoading}
-                  className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold rounded-xl text-xs sm:text-sm cursor-pointer shadow-md active:scale-95 transition-all text-center flex items-center justify-center gap-1 font-semibold uppercase tracking-wide animate-pulse"
+                  className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold rounded-xl text-xs sm:text-sm cursor-pointer shadow-md active:scale-95 transition-all text-center flex items-center justify-center gap-1 font-semibold uppercase tracking-wide"
                 >
-                  {benLoading ? "Sécurisation..." : "se connecter à l'espace"}
+                  {benLoading ? "Sécurisation..." : benFirebaseMode === 'signin' ? "se connecter à l'espace" : "créer mon compte & connecter"}
                 </button>
+
+                <div className="flex flex-col sm:flex-row justify-between items-center text-xs mt-2 pt-1 gap-1 text-slate-400 font-medium">
+                  <span>
+                    {benFirebaseMode === 'signin' ? "Pas encore de compte ?" : "Déjà un compte ?"}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setBenFirebaseMode(benFirebaseMode === 'signin' ? 'signup' : 'signin');
+                      setBenError(null);
+                    }}
+                    className="text-emerald-500 hover:text-emerald-600 font-black transition cursor-pointer select-none"
+                  >
+                    {benFirebaseMode === 'signin' ? "👉 S'INSCRIRE gratuitement" : "👉 SE CONNECTER maintenant"}
+                  </button>
+                </div>
               </form>
             )}
 
@@ -491,8 +592,12 @@ export default function AuthGate({
           <div className="space-y-4">
             
             <div className="text-center">
-              <h3 className="text-lg font-black text-slate-900 mb-1">Administration Opérateur</h3>
-              <p className="text-[11px] text-slate-500">Accès réservé aux gestionnaires de conformité</p>
+              <h3 className="text-lg font-black text-slate-900 mb-1">
+                {adminMode === 'signin' ? "Administration Opérateur" : "Inscription Administration"}
+              </h3>
+              <p className="text-[11px] text-slate-500">
+                {adminMode === 'signin' ? "Accès réservé aux gestionnaires de conformité" : "Créer un nouveau compte administrateur / opérateur"}
+              </p>
             </div>
 
             {adminError && (
@@ -543,7 +648,7 @@ export default function AuthGate({
                     value={adminPassword}
                     onChange={(e) => setAdminPassword(e.target.value)}
                     className="w-full bg-white px-4 py-3 text-xs text-slate-800 font-medium focus:outline-none"
-                    placeholder="Mot de passe"
+                    placeholder={adminMode === 'signin' ? "Mot de passe" : "Définir un mot de passe (min. 6 car.)"}
                   />
                   <button
                     type="button"
@@ -564,8 +669,25 @@ export default function AuthGate({
                 disabled={adminLoading}
                 className="w-full py-3.5 bg-blue-600 hover:bg-blue-750 disabled:opacity-50 text-white font-bold rounded-xl text-xs uppercase cursor-pointer transition shadow-md flex items-center justify-center gap-1.5 mt-2"
               >
-                {adminLoading ? "Traitement..." : "Connexion administration"}
+                {adminLoading ? "Traitement..." : adminMode === 'signin' ? "Connexion administration" : "Créer le compte administration"}
               </button>
+
+              <div className="flex flex-col sm:flex-row justify-between items-center text-xs mt-2 pt-1 gap-1 text-slate-400 font-medium">
+                <span>
+                  {adminMode === 'signin' ? "Pas encore de compte ?" : "Déjà enregistré ?"}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAdminMode(adminMode === 'signin' ? 'signup' : 'signin');
+                    setAdminError(null);
+                    setAdminSuccess(null);
+                  }}
+                  className="text-blue-500 hover:text-blue-600 font-black transition cursor-pointer select-none"
+                >
+                  {adminMode === 'signin' ? "👉 Créer un nouveau" : "👉 Se connecter maintenant"}
+                </button>
+              </div>
             </form>
 
             <div className="pt-4 border-t border-slate-100 text-center">

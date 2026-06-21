@@ -113,20 +113,22 @@ export default function AdminClientsManager({ onCreateToast }: AdminClientsManag
       await signOut(secondaryAuth);
 
       // 2. Setup user details
-      const clientCode = generateRandomCode();
+      const clientCode = password.trim();
       const clientToken = generateRandomToken();
 
       const newClient: Client = {
         uid,
         email: email.trim().toLowerCase(),
         codeClient: clientCode,
+        pin: clientCode,
         token: clientToken,
         role: 'client',
         montant: parseFloat(montant) || 0,
         statut: 'actif',
         plan: plan,
         createdAt: Date.now(),
-        lastLogin: Date.now()
+        lastLogin: Date.now(),
+        dateExpiration: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toLocaleDateString('fr-FR')
       };
 
       // 3. Save into our clients collection with zero latency

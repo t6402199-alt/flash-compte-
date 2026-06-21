@@ -106,13 +106,15 @@
         "uid": { "type": "string" },
         "email": { "type": "string" },
         "codeClient": { "type": "string" },
+        "pin": { "type": "string" },
         "token": { "type": "string" },
         "role": { "type": "string", "enum": ["client", "admin"] },
         "montant": { "type": "number" },
         "statut": { "type": "string", "enum": ["actif", "bloqué"] },
         "plan": { "type": "string", "enum": ["free", "pro", "vip"] },
         "createdAt": { "type": "number" },
-        "lastLogin": { "type": "number" }
+        "lastLogin": { "type": "number" },
+        "dateExpiration": { "type": "string" }
       },
       "required": ["uid", "email", "codeClient", "token", "role", "montant", "statut", "plan", "createdAt"]
     }

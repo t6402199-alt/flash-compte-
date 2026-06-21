@@ -83,6 +83,7 @@ export interface Client {
   uid: string;
   email: string;
   codeClient: string;
+  pin?: string;
   token: string;
   role: 'client' | 'admin';
   montant: number;
@@ -90,5 +91,6 @@ export interface Client {
   plan: 'free' | 'pro' | 'vip';
   createdAt: number;
   lastLogin?: number;
+  dateExpiration?: string;
 }
 

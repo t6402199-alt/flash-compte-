@@ -283,6 +283,8 @@ export async function saveBalanceToDb(balance: number): Promise<void> {
 const CLIENTS_COL = 'clients';
 
 export async function saveClientToDb(client: Client): Promise<void> {
+  console.log("Auth créé para UID:", client.uid);
+  console.log("Début écriture Firestore pour la collection 'clients'...");
   try {
     const { uid, ...data } = client;
     const docRef = doc(db, CLIENTS_COL, uid);
@@ -295,9 +297,16 @@ export async function saveClientToDb(client: Client): Promise<void> {
       }
     });
 
+    // Ensure pin is always correctly initialized if possible
+    if (!cleanData.pin && cleanData.codeClient) {
+      cleanData.pin = cleanData.codeClient;
+    }
+
     await setDoc(docRef, cleanData, { merge: true });
+    console.log("Firestore OK : Enregistrement réussi.");
+    console.log("Firestore client créé avec UID:", uid);
   } catch (error) {
-    console.error("Error saving client to Firestore:", error);
+    console.error("Erreur Firestore lors de l'enregistrement de l'utilisateur :", error);
     throw error;
   }
 }
