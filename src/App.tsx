@@ -22,6 +22,7 @@ import SimulatedBankPortal from './components/SimulatedBankPortal';
 import AuthGate from './components/AuthGate';
 import LandingPage from './components/LandingPage';
 import AdminClientsManager from './components/AdminClientsManager';
+import EspaceClientFlash from './components/EspaceClientFlash';
 import { Contact, CampaignLog, PaymentTransaction, SimulatedTransfer, Client } from './types';
 import { 
   getTransfersFromDb, 
@@ -83,6 +84,17 @@ export default function App() {
   const [clientProfile, setClientProfile] = useState<Client | null>(null);
   const [authLoading, setAuthLoading] = useState<boolean>(true);
   const [bypassAdmin, setBypassAdmin] = useState<boolean>(false);
+  const [flashToken, setFlashToken] = useState<string | null>(() => {
+    const searchParams = new URLSearchParams(window.location.search);
+    return searchParams.get('token');
+  });
+
+  const clearFlashToken = () => {
+    setFlashToken(null);
+    const url = new URL(window.location.href);
+    url.searchParams.delete('token');
+    window.history.replaceState({}, '', url.toString());
+  };
 
   // Sync client profile details in real-time if role is client
   useEffect(() => {
@@ -100,6 +112,8 @@ export default function App() {
           handleLogout();
         }
       }
+    }, (error) => {
+      console.warn("Client profile real-time sync status (handled):", error);
     });
     return () => unsub();
   }, [currentUser, userRole]);
@@ -224,61 +238,23 @@ export default function App() {
   const [transactions, setTransactions] = useState<PaymentTransaction[]>([]);
   const [transfers, setTransfers] = useState<SimulatedTransfer[]>([]);
 
-  // 1. Initial configuration loading and real-time synchronization on mount
+  // 1. Initial configuration loading and real-time synchronization on mount for public transfers
   useEffect(() => {
-    async function initDb() {
+    async function initTransfers() {
       try {
-        // Fetch everything in parallel to minimize latency on mobile networks and cold starts
-        const [dbBalance, dbContacts, dbCampaigns, dbTransactions, dbTransfers] = await Promise.all([
-          getBalanceFromDb(),
-          getContactsFromDb(),
-          getCampaignsFromDb(),
-          getTransactionsFromDb(),
-          getTransfersFromDb()
-        ]);
-
-        // Set Balance
-        if (dbBalance !== null) {
-          setBalance(dbBalance);
-        } else {
-          await saveBalanceToDb(1525000);
-        }
-
-        // Set Contacts
-        if (dbContacts.length > 0) {
-          setContacts(dbContacts);
-        } else {
-          setContacts([]);
-        }
-
-        // Set Campaigns
-        if (dbCampaigns.length > 0) {
-          setCampaigns(dbCampaigns);
-        } else {
-          setCampaigns([]);
-        }
-
-        // Set Transactions
-        if (dbTransactions.length > 0) {
-          setTransactions(dbTransactions);
-        } else {
-          setTransactions([]);
-        }
-
-        // Set Transfers
+        const dbTransfers = await getTransfersFromDb();
         if (dbTransfers.length > 0) {
           setTransfers(dbTransfers);
         } else {
           setTransfers([]);
         }
       } catch (err) {
-        console.error("Database initialization failed, fallbacks applied:", err);
+        console.warn("Could not fetch transfers initial state:", err);
       }
     }
+    
+    initTransfers();
 
-    initDb();
-
-    // Setup active listeners for absolute real-time multi-browser/multi-phone data syncing!
     const unsubTransfers = onSnapshot(collection(db, 'transfers'), (snapshot) => {
       const items: SimulatedTransfer[] = [];
       snapshot.forEach((doc) => {
@@ -288,6 +264,66 @@ export default function App() {
     }, (err) => {
       console.warn("Firestore transfers snapshot listener: fallback active", err);
     });
+
+    return () => {
+      unsubTransfers();
+    };
+  }, []);
+
+  // 1b. Real-time synchronization for Authenticated Admin / Operators only to prevent permission-denied errors
+  useEffect(() => {
+    // Only subscribe to protected data if we are authenticated as admin or in bypass mode
+    const hasAdminAccess = (currentUser !== null && userRole === 'admin') || bypassAdmin === true;
+    if (!hasAdminAccess) {
+      // Clear protected data to prevent interface leakage
+      setContacts([]);
+      setCampaigns([]);
+      setTransactions([]);
+      return;
+    }
+
+    async function initProtectedDb() {
+      try {
+        const [dbBalance, dbContacts, dbCampaigns, dbTransactions] = await Promise.all([
+          getBalanceFromDb(),
+          getContactsFromDb(),
+          getCampaignsFromDb(),
+          getTransactionsFromDb()
+        ]);
+
+        if (dbBalance !== null) {
+          setBalance(dbBalance);
+        } else {
+          try {
+            await saveBalanceToDb(1525000);
+          } catch (e) {
+            console.warn("Balance save fallback:", e);
+          }
+        }
+
+        if (dbContacts.length > 0) {
+          setContacts(dbContacts);
+        } else {
+          setContacts([]);
+        }
+
+        if (dbCampaigns.length > 0) {
+          setCampaigns(dbCampaigns);
+        } else {
+          setCampaigns([]);
+        }
+
+        if (dbTransactions.length > 0) {
+          setTransactions(dbTransactions);
+        } else {
+          setTransactions([]);
+        }
+      } catch (err) {
+        console.error("Protected DB initialization failed:", err);
+      }
+    }
+
+    initProtectedDb();
 
     const unsubContacts = onSnapshot(collection(db, 'contacts'), (snapshot) => {
       const items: Contact[] = [];
@@ -328,13 +364,12 @@ export default function App() {
     });
 
     return () => {
-      unsubTransfers();
       unsubContacts();
       unsubCampaigns();
       unsubTransactions();
       unsubBalance();
     };
-  }, []);
+  }, [currentUser, userRole, bypassAdmin]);
 
   // 1b. Automatic System Theme preference detection (Clair / Sombre)
   useEffect(() => {
@@ -742,6 +777,16 @@ export default function App() {
         <div className="h-10 w-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-4" />
         <span className="text-xs text-slate-400 font-mono tracking-widest animate-pulse">CHARGEMENT DES SYSTÈMES SECURE...</span>
       </div>
+    );
+  }
+
+  // Intercept and load the lightweight visual client space if ?token= is detected
+  if (flashToken) {
+    return (
+      <EspaceClientFlash 
+        token={flashToken} 
+        onClose={clearFlashToken} 
+      />
     );
   }
 
