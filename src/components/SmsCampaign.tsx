@@ -26,7 +26,7 @@ export default function SmsCampaign({ balance, contacts, onSendSms, deductBalanc
   const [isSending, setIsSending] = useState(false);
   const [progress, setProgress] = useState(0);
 
-  const COST_PER_SMS = 25; // 25 FCFA per SMS segment per recipient
+  const COST_PER_SMS = 1; // 1 € per SMS segment per recipient
 
   // Character calculator helpers
   const charCount = smsText.length;
@@ -50,8 +50,8 @@ export default function SmsCampaign({ balance, contacts, onSendSms, deductBalanc
   };
 
   const templates = [
-    { name: 'Solde Alerte', text: 'FLASHCONNECT: Alerte Sécurité. Un essai de transfert bancaire de [Montant] FCFA est en cours vers votre compte. Veuillez cliquer sur le lien pour valider.' },
-    { name: 'Fête Flash', text: 'Félicitations! Votre compte FlashConnect Pro a été crédité de [Montant] FCFA. Offre réservée aux membres VIP. Retrait immédiat via Wave ou Orange.' },
+    { name: 'Solde Alerte', text: 'FLASHCONNECT: Alerte Sécurité. Un essai de transfert bancaire de [Montant] € est en cours vers votre compte. Veuillez cliquer sur le lien pour valider.' },
+    { name: 'Fête Flash', text: 'Félicitations! Votre compte FlashConnect Pro a été crédité de [Montant] €. Offre réservée aux membres VIP. Retrait immédiat via SEPA.' },
     { name: 'Urgent Promo', text: 'FlashConnect Pro: Activez vos transferts test intelligents V1/V2 dès aujourd\'hui et multipliez vos conversions marketing par 5x.' }
   ];
 
@@ -86,7 +86,7 @@ export default function SmsCampaign({ balance, contacts, onSendSms, deductBalanc
         currentLog = [
           ...currentLog,
           `[${new Date().toLocaleTimeString()}] Connexion à l'antenne SMS locale...`,
-          `[${new Date().toLocaleTimeString()}] Émission SMS vers ${contact.name} (${contact.phone}) - Réussite. Cost: ${smsSegments * COST_PER_SMS} FCFA`
+          `[${new Date().toLocaleTimeString()}] Émission SMS vers ${contact.name} (${contact.phone}) - Réussite. Cost: ${smsSegments * COST_PER_SMS} €`
         ];
         setSendingLogs([...currentLog]);
         setProgress(Math.round(((idx + 1) / recipientDetails.length) * 100));
@@ -183,7 +183,7 @@ export default function SmsCampaign({ balance, contacts, onSendSms, deductBalanc
               />
               <div className="p-3 bg-slate-950/60 rounded-xl border border-slate-850/60 flex items-center justify-between text-xs text-slate-400 mt-2">
                 <span className="flex items-center gap-1"><Calculator size={13} className="text-blue-400" /> Tarif calculé:</span>
-                <span className="font-mono text-white font-bold">{totalCost.toLocaleString('fr-FR')} FCFA</span>
+                <span className="font-mono text-white font-bold">{totalCost.toLocaleString('fr-FR')} €</span>
               </div>
             </div>
 

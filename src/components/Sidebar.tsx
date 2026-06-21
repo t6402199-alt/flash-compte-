@@ -89,7 +89,7 @@ export default function Sidebar({
               <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
             </div>
             <div className="text-xl font-bold text-emerald-400 mt-1 font-mono tracking-tight">
-              {balance.toLocaleString('fr-FR')} <span className="text-xs text-slate-300 font-sans font-normal">FCFA</span>
+              {balance.toLocaleString('fr-FR')} <span className="text-xs text-slate-300 font-sans font-normal">€</span>
             </div>
             <button 
               onClick={() => {

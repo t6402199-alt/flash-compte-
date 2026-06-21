@@ -19,16 +19,14 @@ interface BillingManagerProps {
 
 export default function BillingManager({ balance, onAddBalance, transactions }: BillingManagerProps) {
   const [amountInput, setAmountInput] = useState('');
-  const [selectedMethod, setSelectedMethod] = useState('Wave');
+  const [selectedMethod, setSelectedMethod] = useState('Visa');
   const [phoneInput, setPhoneInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
   const paymentMethods = [
-    { id: 'Wave', label: 'Wave Côte d\'Ivoire / Sénégal', color: 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20 hover:border-cyan-500/50', icon: '🌊', suffix: 'WAVE FCFA' },
-    { id: 'Orange', label: 'Orange Money (Afrique)', color: 'bg-orange-500/10 text-orange-400 border-orange-500/20 hover:border-orange-500/50', icon: '🍊', suffix: 'OM FCFA' },
-    { id: 'MTN', label: 'MTN MoMo (Mobile Money)', color: 'bg-amber-500/10 text-amber-500 border-amber-500/20 hover:border-amber-500/50', icon: '🟡', suffix: 'MoMo FCFA' },
-    { id: 'Moov', label: 'Moov Money Flooz', color: 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20 hover:border-indigo-500/50', icon: '🟢', suffix: 'Moov FCFA' },
-    { id: 'Visa', label: 'Visa où Mastercard', color: 'bg-blue-600/10 text-blue-400 border-blue-600/20 hover:border-blue-600/50', icon: '💳', suffix: 'Card FCFA' }
+    { id: 'Visa', label: 'Carte Bancaire (Visa / Mastercard)', color: 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20 hover:border-cyan-500/50', icon: '💳', suffix: 'Card €' },
+    { id: 'Sepa', label: 'Virement / Prélèvement SEPA', color: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:border-emerald-500/50', icon: '🇪🇺', suffix: 'SEPA €' },
+    { id: 'virement', label: 'Virement bancaire européen', color: 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20 hover:border-indigo-500/50', icon: '🏦', suffix: 'Bank €' }
   ];
 
   const handleRecharge = (e: React.FormEvent) => {
@@ -40,7 +38,7 @@ export default function BillingManager({ balance, onAddBalance, transactions }: 
     }
 
     if (parsedAmount > 10000000) {
-      alert('Montant maximal de simulation par dépôt: 10 000 000 FCFA.');
+      alert('Montant maximal de simulation par dépôt: 10 000 000 €.');
       return;
     }
 
@@ -50,7 +48,7 @@ export default function BillingManager({ balance, onAddBalance, transactions }: 
       setAmountInput('');
       setPhoneInput('');
       setIsLoading(false);
-      alert(`Simulation réussie ! Votre solde principal FlashConnect a été crédité de + ${parsedAmount.toLocaleString('fr-FR')} FCFA via ${selectedMethod}.`);
+      alert(`Simulation réussie ! Votre solde principal FlashConnect a été crédité de + ${parsedAmount.toLocaleString('fr-FR')} € via ${selectedMethod}.`);
     }, 1200);
   };
 
@@ -71,7 +69,7 @@ export default function BillingManager({ balance, onAddBalance, transactions }: 
         <form onSubmit={handleRecharge} className="space-y-5">
           {/* Method Picker */}
           <div>
-            <label className="text-xs font-semibold text-slate-400 block mb-2.5">CHOISIR LE MOYEN DE PAIEMENT (SIMULATION ZONE CFA)</label>
+            <label className="text-xs font-semibold text-slate-400 block mb-2.5">CHOISIR LE MOYEN DE PAIEMENT (SIMULATION EUROPE)</label>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {paymentMethods.map(m => {
                 const isSelected = selectedMethod === m.id;
@@ -104,7 +102,7 @@ export default function BillingManager({ balance, onAddBalance, transactions }: 
           {/* Amount input & Phone number */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="text-xs font-semibold text-slate-400 block mb-1">MONTANT À RECHARGER (FCFA) *</label>
+              <label className="text-xs font-semibold text-slate-400 block mb-1">MONTANT À RECHARGER (EUR) *</label>
               <div className="relative">
                 <input
                   type="number"
@@ -112,27 +110,27 @@ export default function BillingManager({ balance, onAddBalance, transactions }: 
                   value={amountInput}
                   onChange={(e) => setAmountInput(e.target.value)}
                   className="w-full bg-slate-950 border border-slate-850 rounded-xl pl-4 pr-16 py-2.5 text-sm font-semibold font-mono text-emerald-400 focus:outline-none focus:border-blue-500"
-                  placeholder="Ex: 50000"
+                  placeholder="Ex: 500"
                   min="1"
                 />
-                <span className="absolute inset-y-0 right-4 flex items-center text-xs font-bold text-slate-500 font-mono">FCFA</span>
+                <span className="absolute inset-y-0 right-4 flex items-center text-xs font-bold text-slate-500 font-mono">EUR (€)</span>
               </div>
             </div>
 
             {selectedMethod !== 'Visa' && (
               <div>
-                <label className="text-xs font-semibold text-slate-400 block mb-1">NUMÉRO MOBILE MONEY ASSOCIE *</label>
+                <label className="text-xs font-semibold text-slate-400 block mb-1">IDENTIFIANT DE FACTURATION COMPTE *</label>
                 <div className="relative">
                   <span className="absolute inset-y-0 left-3 flex items-center text-slate-500">
                     <PhoneIcon size={13} />
                   </span>
                   <input
-                    type="tel"
+                    type="text"
                     required
                     value={phoneInput}
                     onChange={(e) => setPhoneInput(e.target.value)}
                     className="w-full bg-slate-950 border border-slate-850 rounded-xl pl-9 pr-4 py-2.5 text-xs text-slate-200 focus:outline-none focus:border-blue-500 font-mono"
-                    placeholder="Ex: +225 07..."
+                    placeholder="Ex: IBAN ou No. Compte..."
                   />
                 </div>
               </div>
@@ -143,14 +141,14 @@ export default function BillingManager({ balance, onAddBalance, transactions }: 
           <div>
             <label className="text-xs font-semibold text-slate-400 block mb-2">RECHARGE RAPIDE :</label>
             <div className="flex flex-wrap gap-2">
-              {[5000, 10000, 25000, 50000, 100000].map(amt => (
+              {[50, 100, 250, 500, 1000].map(amt => (
                 <button
                   key={amt}
                   type="button"
                   onClick={() => setAmountInput(amt.toString())}
                   className="px-3 py-1.5 bg-slate-950 hover:bg-slate-800 border border-slate-850 hover:border-slate-700 text-xs text-slate-200 rounded-lg font-mono font-bold cursor-pointer transition"
                 >
-                  +{amt.toLocaleString('fr-FR')} FCFA
+                  +{amt.toLocaleString('fr-FR')} €
                 </button>
               ))}
             </div>
@@ -160,7 +158,7 @@ export default function BillingManager({ balance, onAddBalance, transactions }: 
           <div className="p-3 bg-blue-950/20 border border-blue-900/30 rounded-xl flex items-center gap-2.5 text-[11px] text-slate-400">
             <AlertCircle size={14} className="text-blue-400 shrink-0" />
             <span>
-              Les recharges de solde s'effectuent dans le cadre de <strong>l'environnement de simulation FlashConnect</strong>. Aucun prélèvement bancaire réel n'aura lieu sur votre carte ou votre Mobile Money.
+              Les recharges de solde s'effectuent dans le cadre de <strong>l'environnement de simulation FlashConnect</strong>. Aucun prélèvement réel ne sera effectué.
             </span>
           </div>
 
@@ -173,7 +171,7 @@ export default function BillingManager({ balance, onAddBalance, transactions }: 
                 : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-500/10'
             }`}
           >
-            {isLoading ? "Vérification de la passerelle CFA..." : <>Valider le rechargement de {(parseInt(amountInput) || 0).toLocaleString('fr-FR')} FCFA <ChevronRight size={14} /></>}
+            {isLoading ? "Vérification de la passerelle..." : <>Valider le rechargement de {(parseInt(amountInput) || 0).toLocaleString('fr-FR')} € <ChevronRight size={14} /></>}
           </button>
         </form>
       </div>
@@ -189,7 +187,7 @@ export default function BillingManager({ balance, onAddBalance, transactions }: 
           <div className="space-y-2 max-h-[320px] overflow-y-auto pr-1">
             {transactions.length === 0 ? (
               <div className="text-center py-16 text-xs text-slate-500 italic">
-                Aucun dépôt enregistré.<br />Utilisez le formulaire pour ajouter des FCFA.
+                Aucun dépôt enregistré.<br />Utilisez le formulaire pour ajouter des fonds.
               </div>
             ) : (
               transactions.map(tr => (
@@ -201,7 +199,7 @@ export default function BillingManager({ balance, onAddBalance, transactions }: 
                     <span className="text-[10px] text-slate-500 font-mono mt-0.5 block">{tr.createdAt}</span>
                   </div>
                   <div className="text-right">
-                    <span className="text-xs font-bold font-mono text-emerald-400">+{tr.amount.toLocaleString('fr-FR')} FCFA</span>
+                    <span className="text-xs font-bold font-mono text-emerald-400">+{tr.amount.toLocaleString('fr-FR')} €</span>
                     <span className="text-[9px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-1 py-0.2 rounded-full block w-fit ml-auto mt-0.5 font-mono">Succès</span>
                   </div>
                 </div>
@@ -214,7 +212,7 @@ export default function BillingManager({ balance, onAddBalance, transactions }: 
           <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-850 flex items-start gap-2">
             <HelpCircle size={14} className="text-slate-500 shrink-0 mt-0.5" />
             <div className="text-[10px] text-slate-400 leading-normal">
-              Besoin de tarification de production réelle ? FlashConnect s'interface avec CinetPay et Bizao pour la mise en ligne opérationnelle.
+              FlashConnect s'interface avec Stripe ou Adyen pour la mise en ligne opérationnelle de vos solutions de paiement.
             </div>
           </div>
         </div>

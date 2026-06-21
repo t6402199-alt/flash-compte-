@@ -51,21 +51,16 @@ export default function AuthGate({
   onBackToHome,
   isStrictClientMode = false
 }: AuthGateProps) {
-  const [activeTab, setActiveTab] = useState<'beneficiary' | 'admin'>(() => {
-    return isStrictClientMode ? 'beneficiary' : 'admin';
-  });
+  const [activeTab, setActiveTab] = useState<'beneficiary' | 'admin'>('admin');
 
   // Sync state if initialTab prop changes
   React.useEffect(() => {
-    setActiveTab(isStrictClientMode ? 'beneficiary' : 'admin');
+    setActiveTab('admin');
   }, [isStrictClientMode]);
 
   // Check URL query parameters for admin bypass on mount
   React.useEffect(() => {
-    const searchParams = new URLSearchParams(window.location.search);
-    if (searchParams.get('admin') === 'true') {
-      setActiveTab('admin');
-    }
+    setActiveTab('admin');
   }, []);
 
   // Pre-fill email from secure URL token parameter if detected
@@ -390,204 +385,7 @@ export default function AuthGate({
           </div>
         </div>
 
-        {/* Tab 1: Beneficiary Access */}
-        {activeTab === 'beneficiary' && (
-          <div className="space-y-4 text-center">
-            
-            <h3 className="text-lg font-black text-slate-900 mb-1 font-sans">
-              {isStrictClientMode ? "Espace Client Privé" : "Connexion à votre compte"}
-            </h3>
-            
-            {/* User profile capsule banner row as on Photo 2 */}
-            <div className="my-2 inline-flex items-center gap-2 px-5 py-2 bg-slate-100 border border-slate-200 rounded-lg text-xs font-bold text-slate-600 select-none shadow-sm uppercase tracking-wide">
-              <User className="text-slate-500" size={13} />
-              {isStrictClientMode ? "🔒 IDENTIFICATION CLIENT FIRESTORE" : "ACCÈS CONFORMITÉ CLIENT"}
-            </div>
-
-            {/* Auth switcher for client between PIN and Firebase */}
-            {!isStrictClientMode && (
-              <div className="grid grid-cols-2 p-1 bg-slate-100/85 border border-slate-200/80 rounded-xl text-xs font-bold font-sans">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setBenAuthMode('pin');
-                    setBenError(null);
-                  }}
-                  className={`py-2 rounded-lg cursor-pointer transition-all duration-200 ${
-                    benAuthMode === 'pin'
-                      ? 'bg-white text-blue-600 shadow-sm'
-                      : 'text-slate-500 hover:text-slate-800'
-                  }`}
-                >
-                  Accès Dossier Virement
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setBenAuthMode('firebase');
-                    setBenError(null);
-                  }}
-                  className={`py-2 rounded-lg cursor-pointer transition-all duration-200 ${
-                    benAuthMode === 'firebase'
-                      ? 'bg-white text-blue-600 shadow-sm'
-                      : 'text-slate-500 hover:text-slate-800'
-                  }`}
-                >
-                  🔐 Espace Client (Firestore)
-                </button>
-              </div>
-            )}
-
-            {benError && (
-              <div className="bg-rose-50 border border-rose-200 rounded-xl p-3.5 text-left text-xs font-semibold text-rose-600 leading-relaxed">
-                <span>⚠️ {benError}</span>
-              </div>
-            )}
-
-            {benAuthMode === 'pin' ? (
-              <form onSubmit={handleBeneficiarySubmit} className="space-y-4 text-left">
-                {/* E-mail Input block (No labels, empty placeholder code, gray icon) */}
-                <div className="flex border border-slate-200 rounded-xl overflow-hidden focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500/50 transition bg-white shadow-sm">
-                  <div className="bg-slate-50 border-r border-slate-200 px-4 py-3.5 flex items-center justify-center text-slate-400 shrink-0 select-none">
-                    <Mail size={15} />
-                  </div>
-                  <input
-                    type="text"
-                    required
-                    value={benId}
-                    onChange={(e) => setBenId(e.target.value)}
-                    className="w-full bg-white px-4 py-3.5 text-xs sm:text-sm text-slate-800 font-medium focus:outline-none"
-                    placeholder="Adresse e-mail, de virement ou ID dossier"
-                  />
-                </div>
-
-                {/* PIN Access Code block (No labels, empty placeholder, dual-colored layout) */}
-                <div className="relative flex border border-slate-200 rounded-xl overflow-hidden focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500/50 transition bg-white shadow-sm">
-                  <div className="bg-slate-50 border-r border-slate-200 px-4 flex items-center justify-center text-slate-400 shrink-0 select-none">
-                    <Lock size={15} />
-                  </div>
-                  <input
-                    type={benShowPin ? "text" : "password"}
-                    required
-                    value={benPin}
-                    onChange={(e) => setBenPin(e.target.value)}
-                    className="w-full bg-white px-4 py-3.5 text-xs sm:text-sm text-slate-800 font-mono font-bold tracking-widest focus:outline-none"
-                    placeholder="Code PIN de connexion"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setBenShowPin(!benShowPin)}
-                    className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-650 cursor-pointer"
-                  >
-                    {benShowPin ? <EyeOff size={14} /> : <Eye size={14} />}
-                  </button>
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={benLoading}
-                  className="w-full py-4 bg-blue-600 hover:bg-blue-750 disabled:opacity-50 text-white font-bold rounded-xl text-xs sm:text-sm cursor-pointer shadow-md active:scale-95 transition-all text-center flex items-center justify-center gap-1 font-semibold uppercase tracking-wide"
-                >
-                  {benLoading ? "Connexion..." : "se connecter"}
-                </button>
-              </form>
-            ) : (
-              <form onSubmit={handleBeneficiaryFirebaseSubmit} className="space-y-4 text-left">
-                {/* Title indicator of current Auth mode inside the Client tab */}
-                <div className="text-center pb-1">
-                  <span className="text-[11px] font-mono tracking-wider text-slate-400 font-bold uppercase">
-                    {benFirebaseMode === 'signin' ? "CONNEXION ESPACE CLIENT" : "INSCRIPTION NOUVEAU CLIENT"}
-                  </span>
-                </div>
-
-                {/* Firebase Email Input block */}
-                <div className="flex border border-slate-200 rounded-xl overflow-hidden focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500/50 transition bg-white shadow-sm">
-                  <div className="bg-slate-50 border-r border-slate-200 px-4 py-3.5 flex items-center justify-center text-slate-400 shrink-0 select-none">
-                    <Mail size={15} />
-                  </div>
-                  <input
-                    type="email"
-                    required
-                    value={benEmail}
-                    onChange={(e) => setBenEmail(e.target.value)}
-                    className="w-full bg-white px-4 py-3.5 text-xs sm:text-sm text-slate-800 font-medium focus:outline-none"
-                    placeholder="Adresse e-mail client"
-                  />
-                </div>
-
-                {/* Firebase Password block */}
-                <div className="relative flex border border-slate-200 rounded-xl overflow-hidden focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500/50 transition bg-white shadow-sm">
-                  <div className="bg-slate-50 border-r border-slate-200 px-4 flex items-center justify-center text-slate-400 shrink-0 select-none">
-                    <Lock size={15} />
-                  </div>
-                  <input
-                    type={benShowPassword ? "text" : "password"}
-                    required
-                    value={benPassword}
-                    onChange={(e) => setBenPassword(e.target.value)}
-                    className="w-full bg-white px-4 py-3.5 text-xs sm:text-sm text-slate-800 font-medium focus:outline-none"
-                    placeholder={benFirebaseMode === 'signin' ? "Mot de passe ou Code client" : "Définir un mot de passe (min. 6 car.)"}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setBenShowPassword(!benShowPassword)}
-                    className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-650 cursor-pointer"
-                  >
-                    {benShowPassword ? <EyeOff size={14} /> : <Eye size={14} />}
-                  </button>
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={benLoading}
-                  className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold rounded-xl text-xs sm:text-sm cursor-pointer shadow-md active:scale-95 transition-all text-center flex items-center justify-center gap-1 font-semibold uppercase tracking-wide"
-                >
-                  {benLoading ? "Sécurisation..." : benFirebaseMode === 'signin' ? "se connecter à l'espace" : "créer mon compte & connecter"}
-                </button>
-
-                <div className="flex flex-col sm:flex-row justify-between items-center text-xs mt-2 pt-1 gap-1 text-slate-400 font-medium">
-                  <span>
-                    {benFirebaseMode === 'signin' ? "Pas encore de compte ?" : "Déjà un compte ?"}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setBenFirebaseMode(benFirebaseMode === 'signin' ? 'signup' : 'signin');
-                      setBenError(null);
-                    }}
-                    className="text-emerald-500 hover:text-emerald-600 font-black transition cursor-pointer select-none"
-                  >
-                    {benFirebaseMode === 'signin' ? "👉 S'INSCRIRE gratuitement" : "👉 SE CONNECTER maintenant"}
-                  </button>
-                </div>
-              </form>
-            )}
-
-            {/* Accès rapide Espace Administration visible */}
-            {!isStrictClientMode && (
-              <div className="pt-5 border-t border-slate-100 text-center mt-4">
-                <button 
-                  type="button" 
-                  onClick={() => setActiveTab('admin')} 
-                  className="text-xs text-slate-500 hover:text-blue-600 font-bold transition flex items-center justify-center gap-1.5 mx-auto cursor-pointer select-none"
-                >
-                  ⚙️ Accéder à l'Espace Administration / Opérateur
-                </button>
-                {onBackToHome && (
-                  <button 
-                    type="button" 
-                    onClick={onBackToHome} 
-                    className="text-[11px] text-slate-400 hover:text-emerald-600 font-semibold transition flex items-center justify-center gap-1.5 mx-auto cursor-pointer select-none mt-2.5"
-                  >
-                    🏠 Retourner à la page d'accueil du site
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Tab 2: SaaS Admin Access */}
+        {/* SaaS Admin Access */}
         {activeTab === 'admin' && (
           <div className="space-y-4">
             
@@ -690,33 +488,16 @@ export default function AuthGate({
               </div>
             </form>
 
-            <div className="pt-4 border-t border-slate-100 text-center">
-              <button 
-                type="button" 
-                onClick={() => setActiveTab('beneficiary')} 
-                className="text-xs text-gray-500 hover:text-blue-600 font-bold transition cursor-pointer select-none"
-              >
-                ← Retour à l'Espace Client
-              </button>
+            <div className="pt-4 border-t border-slate-101 text-center">
               {onBackToHome && (
                 <button 
                   type="button" 
                   onClick={onBackToHome} 
-                  className="text-[11px] text-slate-400 hover:text-emerald-600 font-semibold transition flex items-center justify-center gap-1.5 mx-auto cursor-pointer select-none mt-2"
+                  className="text-[11px] text-slate-450 hover:text-blue-600 font-semibold transition flex items-center justify-center gap-1.5 mx-auto cursor-pointer select-none"
                 >
                   🏠 Retourner à la page d'accueil du site
                 </button>
               )}
-            </div>
-
-            {/* Quick Demo Access Bypass Button */}
-            <div className="pt-2 flex flex-col items-center">
-              <button
-                onClick={onBypassAdmin}
-                className="w-full py-2 border border-dashed border-slate-300 hover:border-blue-500/50 hover:bg-slate-50 text-slate-500 hover:text-blue-600 rounded-xl text-[10px] font-bold cursor-pointer transition-all duration-200"
-              >
-                ⚡ Entrée de démonstration rapide (Contourner l'Admin)
-              </button>
             </div>
           </div>
         )}

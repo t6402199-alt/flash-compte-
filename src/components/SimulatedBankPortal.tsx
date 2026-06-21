@@ -59,18 +59,7 @@ export default function SimulatedBankPortal({
   
   // PRIMARY PORTAL NAVIGATION
   // Screens: 'LOGIN' | 'PORTAL_DASHBOARD'
-  const [currentScreen, setCurrentScreen] = useState<'LOGIN' | 'PORTAL_DASHBOARD'>(() => {
-    const searchParams = new URLSearchParams(window.location.search);
-    const cameViaDirectLink = searchParams.get('sid') || searchParams.get('c');
-    
-    // If clicking a direct client access link, require login/credentials entry first
-    if (cameViaDirectLink) {
-      return 'LOGIN';
-    }
-    
-    // If they already authenticated via standard front-page AuthGate, skip double login
-    return 'PORTAL_DASHBOARD';
-  });
+  const [currentScreen, setCurrentScreen] = useState<'LOGIN' | 'PORTAL_DASHBOARD'>('PORTAL_DASHBOARD');
   
   // Active tab in client workspace
   // Tabs: 'solde' | 'carte' | 'virement' | 'compte'
@@ -111,6 +100,9 @@ export default function SimulatedBankPortal({
   // SUCCESS OUTBOUND MODAL
   const [showSuccessModal, setShowSuccessModal] = useState(false);
 
+  // INLINE CUSTOM MODAL TOAST FOR IFRAME COMPATIBILITY
+  const [alertMessage, setAlertMessage] = useState<string | null>(null);
+
   // AUXILIARY SIMULATED EMAIL INBOX FOR THE USER/OPERATOR to see outgoing alerts!
   const [emails, setEmails] = useState<SimulatedEmail[]>([]);
   const [showEmailInbox, setShowEmailInbox] = useState(false);
@@ -120,10 +112,10 @@ export default function SimulatedBankPortal({
   const getCurrencyDetails = () => {
     const cur = transfer.currency || 'EUR (€)';
     if (cur.includes('XOF') || cur.includes('FCFA (XOF)')) {
-      return { symbol: 'F.CFA', code: 'XOF' };
+      return { symbol: '€', code: 'EUR' };
     }
     if (cur.includes('XAF') || cur.includes('FCFA (XAF)')) {
-      return { symbol: 'F.CFA', code: 'XAF' };
+      return { symbol: '€', code: 'EUR' };
     }
     if (cur.includes('USD') || cur.includes('$')) {
       return { symbol: '$', code: 'USD' };
@@ -164,7 +156,7 @@ export default function SimulatedBankPortal({
 
     if (isMatchEmail && isMatchPin) {
       if (transfer.isBlocked) {
-        alert("Espace client suspendu administrativement par l'opérateur.");
+        setAlertMessage("Espace client suspendu administrativement par l'opérateur.");
         return;
       }
       setCurrentScreen('PORTAL_DASHBOARD');
@@ -433,49 +425,9 @@ export default function SimulatedBankPortal({
       {/* Device wrapper mockup centering space */}
       <div className="w-full max-w-5xl bg-slate-50 rounded-3xl overflow-hidden border border-slate-200 shadow-2xl flex flex-col my-auto min-h-[620px] max-h-[95vh] relative">
         
-        {/* Mock Browser URL and Debug Banner bar */}
-        <div className="bg-slate-900 border-b border-slate-800 p-2 sm:p-3 shrink-0 flex flex-col md:flex-row items-center justify-between gap-3 select-none">
-          <div className="flex items-center gap-3 w-full md:w-auto">
-            {/* Colored dots */}
-            <div className="flex gap-1.5 shrink-0 select-none">
-              <span className="h-3 w-3 rounded-full bg-rose-500 block" />
-              <span className="h-3 w-3 rounded-full bg-amber-400 block" />
-              <span className="h-3 w-3 rounded-full bg-emerald-500 block" />
-            </div>
-
-            {/* URL Display */}
-            <div className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-1 flex items-center gap-2 max-w-[480px] truncate w-full md:w-96">
-              <Lock className="text-emerald-500 shrink-0" size={12} />
-              <span className="text-[10px] text-emerald-500 font-mono tracking-tight font-bold shrink-0">https://</span>
-              <span className="text-[10px] text-slate-400 font-mono truncate select-all">
-                secure-transferwire.int/client/auth?c={transfer.id.replace('tx-', '')}
-              </span>
-            </div>
-          </div>
-
-          <div className="flex items-center justify-between md:justify-end gap-3 w-full md:w-auto">
-            {/* Toggle custom Inbox button helpful for evaluation */}
-            <button
-              onClick={() => {
-                setShowEmailInbox(!showEmailInbox);
-                setUnreadCount(0);
-              }}
-              style={{ contentVisibility: 'auto' }}
-              className={`relative px-3 py-1.5 rounded-xl border text-[11px] font-mono leading-none tracking-tight flex items-center gap-2 transition cursor-pointer ${
-                showEmailInbox
-                  ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
-                  : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'
-              }`}
-            >
-              <Inbox size={13} /> Boîte Mail Client
-              {unreadCount > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 bg-rose-600 text-white font-extrabold text-[9px] h-4 w-4 rounded-full flex items-center justify-center animate-bounce">
-                  {unreadCount}
-                </span>
-              )}
-            </button>
-
-            {/* Back to administrative console or firebase logout */}
+        {/* Top bar with Admin / Logout actions only if available */}
+        {(isFirebaseAuthed || isOperatorView) && (
+          <div className="bg-slate-900 border-b border-slate-800 p-2 sm:p-3 shrink-0 flex items-center justify-end select-none">
             {isFirebaseAuthed ? (
               <button
                 onClick={firebaseSignOut}
@@ -492,7 +444,7 @@ export default function SimulatedBankPortal({
               </button>
             ) : null}
           </div>
-        </div>
+        )}
 
         {/* Cheat sheet helper band removed to respect product-matching layout requirements */}
 
@@ -690,8 +642,24 @@ export default function SimulatedBankPortal({
                   </div>
                 </div>
 
-                {/* Subpage View content switcher based on activeTab */}
-                <div className="flex-1 w-full max-w-3xl mx-auto space-y-4 pb-20 overflow-y-auto">
+                {/* Subpage View content switcher or Blocking Gate */}
+                {transfer.isBlocked ? (
+                  <div className="flex-1 flex flex-col justify-center items-center p-6 text-center font-sans">
+                    <div className="w-full max-w-md bg-white border border-rose-200 rounded-3xl p-8 shadow-xl animate-scale-up space-y-5">
+                      <div className="h-16 w-16 rounded-full bg-rose-50 text-rose-600 border border-rose-105 flex items-center justify-center mx-auto">
+                        <ShieldAlert size={32} />
+                      </div>
+                      <h4 className="text-xl font-extrabold text-[#0D0D0F] tracking-tight">Accès Suspendu</h4>
+                      <p className="text-xs text-slate-500 leading-relaxed font-semibold">
+                        Votre espace client KitsCms / TransferWire a été suspendu administrativement pour des raisons de conformité.
+                      </p>
+                      <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-[11px] text-slate-500 font-medium leading-relaxed">
+                        Veuillez contacter votre gestionnaire ou envoyer les documents d'habilitation requis pour réactiver l'accès et achever vos virements sortants.
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex-1 w-full max-w-3xl mx-auto space-y-4 pb-20 overflow-y-auto">
                   
                   {/* SUBPAGE 1: SOLDE VIEW ACCOUNT OVERVIEW */}
                   {activeTab === 'solde' && (
@@ -699,14 +667,14 @@ export default function SimulatedBankPortal({
                       
                       {/* Success Closeable Balance notification banner */}
                       {showSuccessBanner && (
-                        <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 p-4 rounded-2xl relative shadow-sm flex items-start gap-3">
-                          <CheckCircle className="text-emerald-600 shrink-0 mt-0.5" size={16} />
+                        <div className="bg-amber-50 border border-amber-200 text-amber-900 p-4 rounded-2xl relative shadow-sm flex items-start gap-3 animate-fade-in font-sans">
+                          <CheckCircle className="text-amber-600 shrink-0 mt-0.5" size={16} />
                           <div className="text-xs leading-relaxed font-semibold pr-6">
-                            Un virement de {transfer.amount.toLocaleString('fr-FR')} EUR reçu et crédité sur votre compte. Vous pouvez ajouter votre IBAN afin d'effectuer un virement externe vers votre banque.
+                            Remboursement de {transfer.amount.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {curSymbol}. Les fonds ont été reçus par {transfer.senderBank || 'Caixa Econômica Federal'} et crédités sur son compte. Vous pouvez essayer d'effectuer un autre virement externe vers votre banque.
                           </div>
                           <button 
                             onClick={() => setShowSuccessBanner(false)}
-                            className="absolute top-3 right-3 text-emerald-550 hover:text-emerald-700 hover:bg-emerald-100 p-1 rounded-full cursor-pointer transition"
+                            className="absolute top-3 right-3 text-amber-600 hover:text-amber-800 hover:bg-amber-100 p-1 rounded-full cursor-pointer transition"
                           >
                             <X size={12} />
                           </button>
@@ -720,12 +688,12 @@ export default function SimulatedBankPortal({
                           <Coins size={140} />
                         </div>
 
-                        <div className="space-y-1.5 z-10">
+                        <div className="space-y-1.5 z-10 font-sans">
                           <span className="text-[10px] font-mono tracking-widest text-blue-200 uppercase font-black flex items-center gap-1">
                             <Coins size={11} className="text-blue-305" /> Solde du compte :
                           </span>
                           <strong className="text-4xl font-black font-sans tracking-tight block">
-                            {transfer.amount.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+                            {transfer.amount.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {curSymbol}
                           </strong>
                         </div>
 
@@ -748,26 +716,28 @@ export default function SimulatedBankPortal({
 
                       {/* Transaction history section list */}
                       <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm space-y-4">
-                        <h4 className="text-sm font-black text-slate-800 uppercase tracking-wider pb-3 border-b border-slate-101">
+                        <h4 className="text-sm font-black text-slate-800 uppercase tracking-wider pb-3 border-b border-slate-100">
                           Historique des transactions
                         </h4>
 
                         <div className="space-y-4">
-                          {/* Transfer Virement entry block */}
-                          <div className="flex items-center justify-between border-b border-slate-100 pb-3 leading-normal">
+                          {/* Transfer 1: Remboursement reçu */}
+                          <div className="flex items-center justify-between border-b border-slate-100 pb-3 leading-normal font-sans">
                             <div className="flex items-center gap-3">
                               <span className="h-10 w-10 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-100 flex items-center justify-center">
                                 <Building size={18} />
                               </span>
                               <div>
-                                <h5 className="text-xs font-black text-slate-900 leading-tight">Virement reçu</h5>
-                                <span className="text-[10px] text-slate-400 font-bold tracking-wider font-mono uppercase">TRANSFERWIRE</span>
+                                <h5 className="text-xs font-black text-slate-905 leading-tight">Remboursement reçu</h5>
+                                <span className="text-[10px] text-slate-400 font-bold tracking-wider font-mono uppercase">
+                                  {transfer.senderBank || 'Caixa Econômica Federal'}
+                                </span>
                               </div>
                             </div>
 
                             <div className="text-right">
-                              <strong className="text-emerald-700 font-black text-sm font-sans">
-                                +{transfer.amount.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+                              <strong className="text-emerald-700 font-black text-xs sm:text-sm font-sans">
+                                +{transfer.amount.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {curSymbol}
                               </strong>
                               <span className="text-[9px] text-slate-400 font-bold font-mono block mt-1">
                                 {new Date(transfer.createdAt).toLocaleDateString('fr-FR')} {new Date(transfer.createdAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
@@ -775,23 +745,35 @@ export default function SimulatedBankPortal({
                             </div>
                           </div>
 
-                          {/* Default card registration verification charge */}
-                          <div className="flex items-center justify-between leading-normal opacity-80">
+                          {/* Transfer 2: Transfert envoyé */}
+                          <div className="flex items-center justify-between leading-normal pb-1 font-sans">
                             <div className="flex items-center gap-3">
-                              <span className="h-10 w-10 rounded-full bg-slate-100 text-slate-500 border border-slate-200 flex items-center justify-center">
-                                <CreditCard size={18} />
+                              <span className="h-10 w-10 rounded-full bg-rose-50 text-rose-600 border border-rose-100 flex items-center justify-center">
+                                <ArrowUpRight size={18} />
                               </span>
                               <div>
-                                <h5 className="text-xs font-medium text-slate-650 leading-tight">Activation de compte</h5>
-                                <span className="text-[10px] text-slate-400 font-semibold font-mono uppercase">VÉRIFICATION D'IP</span>
+                                <h5 className="text-xs font-black text-slate-905 leading-tight">Transfert envoyé</h5>
+                                <span className="text-[10px] text-slate-400 font-bold tracking-wider font-mono uppercase">
+                                  {transfer.recipientAccount || '2007596816125'}
+                                </span>
                               </div>
                             </div>
 
                             <div className="text-right">
-                              <strong className="text-slate-650 font-black text-xs font-mono">
-                                0,00 €
+                              <strong className="text-rose-700 font-black text-xs sm:text-sm font-sans">
+                                -{transfer.amount.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {curSymbol}
                               </strong>
-                              <span className="text-[9px] text-slate-400 font-mono block">Trimestriel</span>
+                              <span className="text-[9px] text-slate-400 font-bold font-mono block mt-1">
+                                {(() => {
+                                  try {
+                                    const d = new Date(transfer.createdAt);
+                                    d.setDate(d.getDate() - 2);
+                                    return `${d.toLocaleDateString('fr-FR')} ${d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`;
+                                  } catch (e) {
+                                    return '01/10/2024 21:10';
+                                  }
+                                })()}
+                              </span>
                             </div>
                           </div>
                         </div>
@@ -866,7 +848,7 @@ export default function SimulatedBankPortal({
                       <div className="grid grid-cols-2 gap-4 max-w-md mx-auto pt-2">
                         <button
                           onClick={() => {
-                            alert("Félicitations administrative ! Votre carte de débit physique/virtuelle est active. Cette étape accélère l'Avis d'Acheminement Bancaire.");
+                            setAlertMessage("Félicitations administrative ! Votre carte de débit physique/virtuelle est active. Cette étape accélère l'Avis d'Acheminement Bancaire.");
                             setShowCardBanner(false);
                           }}
                           className="bg-emerald-600 hover:bg-emerald-700 text-white font-black py-2.5 rounded-xl text-xs uppercase tracking-wide cursor-pointer text-center hover:shadow transition"
@@ -874,7 +856,7 @@ export default function SimulatedBankPortal({
                           Activer ma carte
                         </button>
                         <button
-                          onClick={() => alert("Exception : Pour des raisons de sûreté monétaire, vous ne pouvez pas bloquer une carte d'évaluation de solde active.")}
+                          onClick={() => setAlertMessage("Exception : Pour des raisons de sûreté monétaire, vous ne pouvez pas bloquer une carte d'évaluation de solde active.")}
                           className="bg-rose-600 hover:bg-rose-700 text-white font-black py-2.5 rounded-xl text-xs uppercase tracking-wide cursor-pointer text-center hover:shadow transition"
                         >
                           Bloquer ma carte
@@ -1020,7 +1002,7 @@ export default function SimulatedBankPortal({
                               <h4 className="text-xs font-black text-slate-805 uppercase font-mono tracking-wider">Récapitulatif du virement</h4>
                               <button 
                                 onClick={() => setVirementStep(1)}
-                                className="text-xs text-blue-600 hover:text-blue-800 font-bold cursor-pointer"
+                                className="text-xs text-blue-600 hover:text-blue-805 font-bold cursor-pointer font-sans"
                               >
                                 Modifier ✎
                               </button>
@@ -1029,7 +1011,7 @@ export default function SimulatedBankPortal({
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs font-sans">
                               <div className="space-y-1">
                                 <span className="text-[10px] text-slate-400 uppercase font-mono block">Montant du virement</span>
-                                <strong className="text-sm text-slate-900 font-black">{transfer.amount.toLocaleString('fr-FR')} €</strong>
+                                <strong className="text-sm text-slate-900 font-black">{transfer.amount.toLocaleString('fr-FR')} {curSymbol}</strong>
                               </div>
                               <div className="space-y-1">
                                 <span className="text-[10px] text-slate-400 uppercase font-mono block">IBAN bénéficiaire</span>
@@ -1079,14 +1061,16 @@ export default function SimulatedBankPortal({
                               />
                             </div>
 
-                            <div className="bg-indigo-50 border border-indigo-150 p-3.5 rounded-2xl text-[11px] leading-relaxed select-none text-indigo-900">
-                              💡 <strong>Rappel du Sandbox de démonstration :</strong>
-                              <ul className="list-disc pl-4 mt-1 space-y-0.5 font-medium">
-                                <li>Renseignez le code Pin d'évaluation fourni : <strong className="font-mono bg-white px-1 py-0.5 rounded border leading-none">{transfer.codePin}</strong></li>
-                                <li>Pour simuler un arrêt obligatoire en cours de charge : <strong className="font-mono bg-white px-1 py-0.5 rounded border leading-none">000000</strong></li>
-                                <li>Pour simuler un succès complet de libération à 100% : <strong className="font-mono bg-white px-1 py-0.5 rounded border leading-none">111111</strong></li>
-                              </ul>
-                            </div>
+                            {isOperatorView && (
+                              <div className="bg-indigo-50 border border-indigo-150 p-3.5 rounded-2xl text-[11px] leading-relaxed select-none text-indigo-900">
+                                💡 <strong>Rappel du Sandbox de démonstration :</strong>
+                                <ul className="list-disc pl-4 mt-1 space-y-0.5 font-medium">
+                                  <li>Renseignez le code Pin d'évaluation fourni : <strong className="font-mono bg-white px-1 py-0.5 rounded border leading-none">{transfer.codePin}</strong></li>
+                                  <li>Pour simuler un arrêt obligatoire en cours de charge : <strong className="font-mono bg-white px-1 py-0.5 rounded border leading-none">000000</strong></li>
+                                  <li>Pour simuler un succès complet de libération à 100% : <strong className="font-mono bg-white px-1 py-0.5 rounded border leading-none">111111</strong></li>
+                                </ul>
+                              </div>
+                            )}
 
                             <button
                               type="submit"
@@ -1128,7 +1112,7 @@ export default function SimulatedBankPortal({
                               </div>
                               <div className="flex justify-between py-1.5 pt-2 font-sans">
                                 <span>Montant à recevoir :</span>
-                                <strong className="text-slate-900 text-sm font-black">{transfer.amount.toLocaleString('fr-FR')} €</strong>
+                                <strong className="text-slate-900 text-sm font-black">{transfer.amount.toLocaleString('fr-FR')} {curSymbol}</strong>
                               </div>
                             </div>
                           </div>
@@ -1221,51 +1205,39 @@ export default function SimulatedBankPortal({
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs font-sans">
                           <div className="space-y-1">
                             <span className="text-[10px] text-slate-400 font-mono block uppercase">Type de compte :</span>
-                            <strong className="text-xs text-slate-800 font-bold uppercase">Professionnel</strong>
+                            <strong className="text-xs text-slate-800 font-bold uppercase">{transfer.version === "V2" ? "PROSECURE PREMIUM V2" : "STANDARD V1 PROFESSIONNEL"}</strong>
                           </div>
 
                           <div className="space-y-1">
-                            <span className="text-[10px] text-slate-400 font-mono block uppercase">Statut général réglementaire :</span>
-                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-full font-bold">
-                              <span className="h-1.5 w-1.5 rounded-full bg-emerald-505 block animate-ping" /> Actif
+                            <span className="text-[10px] text-slate-405 font-mono block uppercase">Statut général réglementaire :</span>
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-emerald-50 border border-emerald-205 text-emerald-800 rounded-full font-bold">
+                              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 block animate-ping" /> Actif
                             </span>
                           </div>
 
                           <div className="space-y-1">
                             <span className="text-[10px] text-slate-400 font-mono block uppercase">Canaux de virement supportés :</span>
-                            <strong className="text-xs text-slate-800 font-bold">UMOA Classique Interbancaire</strong>
+                            <strong className="text-xs text-slate-800 font-bold">UMOA Classique Interbancaire / Pix / SEPA</strong>
                           </div>
 
                           <div className="space-y-1">
-                            <span className="text-[10px] text-slate-400 font-mono block uppercase">IBAN Associé ou Virtuel :</span>
-                            <span className="text-rose-600 font-medium font-bold block">
-                              {ibanInput ? ibanInput : "! Aucun IBAN enregistré"}
+                            <span className="text-[10px] text-slate-400 font-mono block uppercase">IBAN / Compte Associé :</span>
+                            <span className="text-slate-800 font-mono font-bold block select-all">
+                              {ibanInput ? ibanInput : (transfer.recipientAccount || "! Aucun IBAN enregistré")}
                             </span>
                           </div>
                         </div>
 
-                        {/* Logout button */}
-                        <div className="pt-4 border-t border-slate-100 flex justify-end">
-                          <button
-                            onClick={() => {
-                              resetVirementWizard();
-                              setCurrentScreen('LOGIN');
-                              setInputPin('');
-                              if (isFirebaseAuthed && firebaseSignOut) {
-                                firebaseSignOut();
-                              }
-                            }}
-                            className="bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 font-bold py-2.5 px-4 rounded-xl text-xs uppercase tracking-wide cursor-pointer transition flex items-center gap-1"
-                          >
-                            ✖ Déconnexion
-                          </button>
+                        {/* Yellow Alert Box to match exactly Photo 4 */}
+                        <div className="mt-4 p-4 bg-amber-50 border border-amber-200 text-amber-900 rounded-2xl text-xs font-semibold leading-relaxed font-sans">
+                          Para atualizar as informações da sua conta, entre em contato com nossa equipe de suporte.
                         </div>
                       </div>
 
                     </div>
                   )}
 
-                </div>
+                </div>)}
 
                 {/* VISUAL COMPASS BACKED TABS FOOTER MENU FROM PORTAL */}
                 <nav className="absolute bottom-5 left-3 right-3 sm:left-4 sm:right-4 h-16 bg-white border border-slate-300 rounded-2xl shadow-xl flex items-center justify-around font-sans shrink-0 z-20 select-none">
@@ -1428,6 +1400,32 @@ export default function SimulatedBankPortal({
                 </div>
               </div>
 
+            </div>
+          </div>
+        )}
+
+        {/* ========================================================= */}
+        {/* MODAL 3: INLINE CUSTOM MODAL ALERT                       */}
+        {/* ========================================================= */}
+        {alertMessage && (
+          <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-xs z-[70] flex items-center justify-center p-4">
+            <div className="w-full max-w-sm bg-white rounded-2xl border border-slate-200 shadow-2xl animate-scale-up text-left overflow-hidden">
+              <div className="bg-slate-50 border-b border-slate-100 p-4 font-sans font-black text-slate-800 text-[10px] uppercase tracking-wider flex items-center gap-2">
+                <ShieldAlert size={14} className="text-blue-600" /> NOTE DE TRANSFERT
+              </div>
+              <div className="p-5 font-sans space-y-4">
+                <p className="text-xs text-slate-600 leading-relaxed font-semibold">
+                  {alertMessage}
+                </p>
+                <div className="flex justify-end pt-1">
+                  <button
+                    onClick={() => setAlertMessage(null)}
+                    className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-black text-[10px] uppercase tracking-wide rounded-xl cursor-pointer hover:shadow transition"
+                  >
+                    OK
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         )}

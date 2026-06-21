@@ -20,13 +20,13 @@ import {
 import { SimulatedTransfer } from '../types';
 
 interface LandingPageProps {
-  onEnterAdminDemo: () => void;
+  onEnterAdminDemo?: () => void;
   onOpenAuthGate: (tab: 'beneficiary' | 'admin') => void;
   transfersCount: number;
 }
 
 export default function LandingPage({ 
-  onEnterAdminDemo, 
+  onEnterAdminDemo = () => {}, 
   onOpenAuthGate,
   transfersCount 
 }: LandingPageProps) {
@@ -71,15 +71,8 @@ export default function LandingPage({
             <a href="#calculator" className="hover:text-blue-400 transition">Convertisseur</a>
             <a href="#faq" className="hover:text-blue-400 transition">Support & FAQ</a>
           </nav>
-
           {/* Action buttons */}
           <div className="flex items-center gap-3">
-            <button
-              onClick={() => onOpenAuthGate('beneficiary')}
-              className="px-4 py-2 border border-slate-700/80 text-slate-300 hover:text-white font-bold text-xs rounded-xl hover:bg-slate-900/50 transition cursor-pointer"
-            >
-              Espace Client
-            </button>
             <button
               onClick={() => onOpenAuthGate('admin')}
               className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs rounded-xl shadow-lg shadow-blue-500/10 hover:shadow-blue-500/20 transition cursor-pointer"
@@ -110,26 +103,13 @@ export default function LandingPage({
         </p>
 
         {/* Action CTAs */}
-        <div className="flex flex-col md:flex-row items-center justify-center gap-4 max-w-4xl mx-auto mb-16">
+        <div className="flex flex-col md:flex-row items-center justify-center gap-4 max-w-2xl mx-auto mb-16">
           <button
-            onClick={() => onOpenAuthGate('beneficiary')}
-            className="w-full md:w-auto px-8 py-4 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black rounded-2xl text-xs sm:text-sm uppercase shadow-lg shadow-emerald-500/20 hover:scale-[1.02] transition-all cursor-pointer flex items-center justify-center gap-2"
+            onClick={() => onOpenAuthGate('admin')}
+            className="w-full md:w-auto px-8 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-505 text-white font-black rounded-2xl text-xs sm:text-sm uppercase shadow-lg shadow-blue-500/25 hover:scale-[1.02] transition-all cursor-pointer flex items-center justify-center gap-2"
           >
             <Zap size={15} className="fill-current" />
             Créer un compte & Se connecter
-          </button>
-          <button
-            onClick={onEnterAdminDemo}
-            className="w-full md:w-auto px-8 py-4 bg-slate-900 hover:bg-slate-850 text-slate-350 hover:text-white font-bold rounded-2xl text-xs sm:text-sm uppercase border border-slate-800 hover:scale-[1.01] transition-all cursor-pointer flex items-center justify-center gap-2"
-          >
-            Démo Console (Sans Login)
-          </button>
-          <button
-            onClick={() => onOpenAuthGate('admin')}
-            className="w-full md:w-auto px-8 py-4 bg-slate-950 hover:bg-slate-900 text-slate-400 hover:text-white font-bold rounded-2xl text-xs sm:text-sm uppercase border border-slate-800/80 hover:scale-[1.01] transition-all cursor-pointer flex items-center justify-center gap-2"
-          >
-            Accéder à la Console Admin
-            <ArrowRight size={14} />
           </button>
         </div>
 

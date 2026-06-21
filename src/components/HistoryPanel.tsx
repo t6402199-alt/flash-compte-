@@ -349,7 +349,7 @@ export default function HistoryPanel({
 
                       {/* Amount and currency */}
                       <td className="py-4 px-4 font-bold text-slate-900 font-mono">
-                        {t.amount.toLocaleString('fr-FR')} {t.currency.includes('FCFA') || t.currency.includes('XOF') ? 'FCFA' : '€'}
+                        {t.amount.toLocaleString('fr-FR')} {t.currency.includes('FCFA') || t.currency.includes('XOF') ? '€' : '€'}
                       </td>
 
                       {/* Threshold / Percentages */}

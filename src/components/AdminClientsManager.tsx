@@ -182,7 +182,7 @@ export default function AdminClientsManager({ onCreateToast }: AdminClientsManag
         montant: parsedAmount
       };
       await saveClientToDb(updatedClient);
-      onCreateToast(`Solde de ${client.email} mis à jour à ${parsedAmount.toLocaleString('fr-FR')} FCFA !`);
+      onCreateToast(`Solde de ${client.email} mis à jour à ${parsedAmount.toLocaleString('fr-FR')} € !`);
     } catch (err: any) {
       console.error("Failed updating client balance:", err);
     }
@@ -281,7 +281,7 @@ export default function AdminClientsManager({ onCreateToast }: AdminClientsManag
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 block mb-1">MONTANT (FCFA)</label>
+                <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 block mb-1">MONTANT (€)</label>
                 <input
                   type="number"
                   required
@@ -364,7 +364,7 @@ export default function AdminClientsManager({ onCreateToast }: AdminClientsManag
                   <tr className="border-b border-slate-100 dark:border-[#1f2a41] text-[10px] text-slate-400 font-mono tracking-wider uppercase">
                     <th className="py-3 px-2">E-mail / UID</th>
                     <th className="py-3 px-2 text-center">Code Client</th>
-                    <th className="py-3 px-2">Solde (FCFA)</th>
+                    <th className="py-3 px-2">Solde (€)</th>
                     <th className="py-3 px-2 text-center">Plan</th>
                     <th className="py-3 px-2 text-center">Statut</th>
                     <th className="py-3 px-2">Lien Spécifique</th>

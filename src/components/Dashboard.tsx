@@ -93,8 +93,8 @@ export default function Dashboard({
       setIbanResult({
         valid: isIbanVal,
         country: ibanInput.toLowerCase().startsWith('fr') ? 'France (FR)' : 
-                 ibanInput.toLowerCase().startsWith('ci') ? 'Côte d\'Ivoire (CI)' : 
-                 ibanInput.toLowerCase().startsWith('sn') ? 'Sénégal (SN)' : 'Zone UMOA / Afrique',
+                 ibanInput.toLowerCase().startsWith('be') ? 'Belgique (BE)' : 
+                 ibanInput.toLowerCase().startsWith('de') ? 'Allemagne (DE)' : 'Zone SEPA / Europe',
         bankCode: 'MOCK-BANK-900',
         type: isIbanVal ? 'Standard SEPA/BCEAO Compliant' : 'Format non reconnu'
       });
@@ -126,9 +126,9 @@ export default function Dashboard({
     if (!code) return;
     if (code === 'SILLYFR' || code === 'KITS2026' || code === 'ADMIN100') {
       if (onAddBalance) {
-        onAddBalance(50000, 'COUPON RECHARGE');
+        onAddBalance(500, 'COUPON RECHARGE');
         setCouponStatus('success');
-        triggerToast('🎁 Félicitations ! +50 000 FCFA ajoutés avec succès !');
+        triggerToast('🎁 Félicitations ! +500 € ajoutés avec succès !');
       } else {
         setCouponStatus('success');
         triggerToast('🎁 Code de réduction validé en mode simulation !');
@@ -201,7 +201,7 @@ export default function Dashboard({
               onClick={() => setActiveTab('billing')}
               className="text-xs bg-slate-100 hover:bg-blue-50 text-blue-600 px-3 py-1.5 rounded-lg border border-slate-200 hover:border-blue-300 transition-all font-semibold"
             >
-              💼 Approvisionner {balance.toLocaleString('fr-FR')} FCFA
+              💼 Approvisionner {balance.toLocaleString('fr-FR')} €
             </button>
           )}
         </div>
@@ -603,7 +603,7 @@ export default function Dashboard({
 
             {couponStatus === 'success' && (
               <p className="mt-3 text-xs font-semibold text-emerald-600 text-center">
-                ✅ Code appliqué avec succès ! +50,000 FCFA injectés.
+                ✅ Code appliqué avec succès ! +500 € injectés.
               </p>
             )}
             {couponStatus === 'error' && (
@@ -689,16 +689,16 @@ export default function Dashboard({
               <div className="p-4 rounded-xl border bg-slate-50 text-xs text-slate-600 space-y-1.5">
                 <div className="flex justify-between">
                   <span>Taux de conversion d'essai:</span>
-                  <span className="font-bold">655 FCFA / USDT</span>
+                  <span className="font-bold">0.92 € / USDT</span>
                 </div>
                 <div className="flex justify-between">
                   <span>Frais de passerelle kits (1.2%):</span>
-                  <span className="font-bold">{(parseFloat(cryptoAmt || '0') * 655 * 0.012).toLocaleString()} FCFA</span>
+                  <span className="font-bold">{(parseFloat(cryptoAmt || '0') * 0.92 * 0.012).toLocaleString()} €</span>
                 </div>
                 <div className="flex justify-between border-t pt-1.5 font-bold text-slate-800 text-sm">
                   <span>Net versé total:</span>
                   <span className="text-emerald-600 font-mono">
-                    {(parseFloat(cryptoAmt || '0') * 655 * 0.988).toLocaleString('fr-FR')} FCFA
+                    {(parseFloat(cryptoAmt || '0') * 0.92 * 0.988).toLocaleString('fr-FR')} €
                   </span>
                 </div>
               </div>

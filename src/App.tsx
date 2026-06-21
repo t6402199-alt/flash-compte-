@@ -490,12 +490,7 @@ export default function App() {
         }
 
         if (match) {
-          const userLocalRole = localStorage.getItem('user_role');
-          const isAuthedAsClient = userLocalRole === 'client';
-          const isAuthedAsAdmin = userLocalRole === 'admin' || bypassAdmin;
-          if (isAuthedAsAdmin || isAuthedAsClient) {
-            setLiveSimulationTx(match);
-          }
+          setLiveSimulationTx(match);
         }
       } else if (portalParam === 'true' && txidParam) {
         let match = await findTransferByAnyField(txidParam) || await getTransferByIdFromDb(txidParam);
@@ -733,14 +728,14 @@ export default function App() {
       version: 'V1',
       lastName: quickRecipient.trim(),
       firstName: '',
-      country: 'Côte d\'Ivoire (+225)',
-      phone: '+225 07 00 00 000',
+      country: 'France (+33)',
+      phone: '+33 6 00 00 00 00',
       email: `${quickRecipient.toLowerCase().replace(/\s+/g, '')}@demo-quick.com`,
-      address: 'Abidjan Plateau, Avenue Chardy',
+      address: 'Paris central, Avenue des Champs-Élysées',
       language: 'Français',
-      senderBank: 'BCEAO Hub Central',
+      senderBank: 'SEPA Realtime Gate',
       amount: amt,
-      currency: 'FCFA (XOF)',
+      currency: 'EUR (€)',
       startPercentage: 10,
       stopPercentage: 100,
       customMessage: 'Virement Express validé avec succès.',
@@ -748,11 +743,11 @@ export default function App() {
       smsAlert: false,
       codePin: Math.floor(100000 + Math.random() * 900000).toString(),
       isBlocked: false,
-      senderName: 'Trésor Mobile Sandbox',
+      senderName: 'Trésor Europe Sandbox',
       recipientName: quickRecipient.trim(),
       recipientBank: quickGate,
-      recipientAccount: '+2250789045',
-      type: 'WAVE',
+      recipientAccount: 'FR76 3000 4000 5000 6000 7000 123',
+      type: 'SEPA',
       reference: `FTX-QUICK-${Math.floor(10000 + Math.random() * 90000)}`,
       status: 'SUCCESS',
       delaySeconds: 3,
@@ -831,10 +826,6 @@ export default function App() {
     if (showLandingPage && !isStrictClientMode) {
       return (
         <LandingPage 
-          onEnterAdminDemo={() => {
-            setBypassAdmin(true);
-            setShowLandingPage(false);
-          }}
           onOpenAuthGate={(tab) => {
             setAuthGateTab(tab);
             setShowLandingPage(false);
@@ -1115,26 +1106,26 @@ export default function App() {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs text-slate-400 block mb-1">MONTANT (FCFA) *</label>
+                  <label className="text-xs text-slate-400 block mb-1">MONTANT (€) *</label>
                   <input
                     type="number"
                     required
                     value={quickAmount}
                     onChange={(e) => setQuickAmount(e.target.value)}
                     className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs font-mono font-bold text-emerald-400 focus:outline-none focus:border-blue-500"
-                    placeholder="Ex: 250000"
+                    placeholder="Ex: 500"
                   />
                 </div>
                 <div>
-                  <label className="text-xs text-slate-400 block mb-1">OPERATEUR MOBILE *</label>
+                  <label className="text-xs text-slate-400 block mb-1">BANQUE DE DESTINATION *</label>
                   <select
                     value={quickGate}
                     onChange={(e) => setQuickGate(e.target.value)}
                     className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-slate-300 focus:outline-none focus:border-blue-500 font-medium"
                   >
-                    <option value="Wave Mali S.A.">Wave Mobile</option>
-                    <option value="Orange Money Afrique">Orange Money</option>
-                    <option value="Ecobank Direct">Ecobank CI</option>
+                    <option value="BNP Paribas S.A.">BNP Paribas</option>
+                    <option value="Société Générale S.A.">Société Générale</option>
+                    <option value="Crédit Agricole S.A.">Crédit Agricole</option>
                   </select>
                 </div>
               </div>

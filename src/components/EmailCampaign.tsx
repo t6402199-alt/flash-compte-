@@ -27,7 +27,7 @@ export default function EmailCampaign({ balance, contacts, onSendEmail, deductBa
   const [showPreview, setShowPreview] = useState(false);
   const [isSending, setIsSending] = useState(false);
 
-  const COST_PER_EMAIL = 10; // 10 FCFA per email to custom targets
+  const COST_PER_EMAIL = 1; // 1 € per email to custom targets
   const totalCost = selectedContacts.length * COST_PER_EMAIL;
 
   const contactsWithEmail = contacts.filter(c => c.email);
@@ -54,7 +54,7 @@ export default function EmailCampaign({ balance, contacts, onSendEmail, deductBa
       subject: 'Avis de Crédit Exceptionnel Flash Compte - Référence [TxID]',
       body: `<h3>Notification de Virement Flash Compte V1</h3>
 <p>Madame, Monsieur,</p>
-<p>Nous vous informons qu'un virement d'essai bancaire d'un montant de <strong>[Montant] FCFA</strong> a été initié avec succès vers votre compte.</p>
+<p>Nous vous informons qu'un virement d'essai bancaire d'un montant de <strong>[Montant] €</strong> a été initié avec succès vers votre compte.</p>
 <p>Pour suivre l'état de ce virement sécurisé rattaché au protocole de simulation <strong>FlashConnect Pro</strong>, veuillez consulter la passerelle de confirmation.</p>
 <p><em>Cet e-mail est généré de manière automatique par les serveurs sandbox.</em></p>`
     },
@@ -197,7 +197,7 @@ export default function EmailCampaign({ balance, contacts, onSendEmail, deductBa
                 onChange={(e) => setEmailBody(e.target.value)}
                 rows={8}
                 className="w-full bg-slate-950 border border-slate-855 rounded-2xl p-4 text-xs font-mono text-slate-200 focus:outline-none focus:border-blue-500 leading-relaxed"
-                placeholder="Ex:<p>Bonjour,</p> <p>Votre virement flash de 500 000 FCFA est validé.</p>"
+                placeholder="Ex:<p>Bonjour,</p> <p>Votre virement flash de 500 € est validé.</p>"
               />
             </div>
 
@@ -312,10 +312,10 @@ export default function EmailCampaign({ balance, contacts, onSendEmail, deductBa
           </div>
           <div className="flex justify-between text-xs text-slate-400 mb-3 font-mono">
             <span>Coût estimé :</span>
-            <span className="text-purple-400 font-bold">{totalCost.toLocaleString('fr-FR')} FCFA</span>
+            <span className="text-purple-400 font-bold">{totalCost.toLocaleString('fr-FR')} €</span>
           </div>
           <div className="text-[10px] text-slate-500 text-center italic leading-tight">
-            Tarif standard SaaS : 10 FCFA par transmission validée.
+            Tarif standard SaaS : 1 € par transmission validée.
           </div>
         </div>
       </div>
