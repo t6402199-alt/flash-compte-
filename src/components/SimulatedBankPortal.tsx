@@ -25,26 +25,18 @@ import {
   EyeOff,
   Inbox
 } from 'lucide-react';
-import { SimulatedTransfer } from '../types';
+import { SimulatedTransfer, SimulatedEmail } from '../types';
+import { saveTransferToDb } from '../lib/firebase';
 
 interface SimulatedBankPortalProps {
   transfer: SimulatedTransfer;
   onClose: () => void;
   onSetCompleted: (id: string) => void;
   onTriggerEmailNotification?: (title: string, content: string, status: 'Envoyé' | 'En attente' | 'Échoué') => void;
+  onUpdateTransferAmount?: (id: string, newAmount: number) => void;
   isFirebaseAuthed?: boolean;
   firebaseSignOut?: () => void;
   isOperatorView?: boolean;
-}
-
-interface SimulatedEmail {
-  id: string;
-  sender: string;
-  recipient: string;
-  subject: string;
-  body: string;
-  timestamp: string;
-  status: 'SUCCESS' | 'FAILURE';
 }
 
 export default function SimulatedBankPortal({ 
@@ -52,6 +44,7 @@ export default function SimulatedBankPortal({
   onClose, 
   onSetCompleted, 
   onTriggerEmailNotification,
+  onUpdateTransferAmount,
   isFirebaseAuthed = false,
   firebaseSignOut,
   isOperatorView = false
@@ -64,6 +57,12 @@ export default function SimulatedBankPortal({
   // Active tab in client workspace
   // Tabs: 'solde' | 'carte' | 'virement' | 'compte'
   const [activeTab, setActiveTab] = useState<'solde' | 'carte' | 'virement' | 'compte'>('solde');
+
+  // Left Drawers/Sidebar Toggle Navigation Option
+  const [isLeftSidebarOpen, setIsLeftSidebarOpen] = useState(false);
+
+  // Dynamic status-aware transfers logged locally for the dashboard history
+  const [userTransfers, setUserTransfers] = useState<any[]>([]);
 
   // FORM INPUTS
   const [inputEmail, setInputEmail] = useState(transfer.email);
@@ -104,10 +103,19 @@ export default function SimulatedBankPortal({
   const [alertMessage, setAlertMessage] = useState<string | null>(null);
 
   // AUXILIARY SIMULATED EMAIL INBOX FOR THE USER/OPERATOR to see outgoing alerts!
-  const [emails, setEmails] = useState<SimulatedEmail[]>([]);
+  const [emails, setEmails] = useState<SimulatedEmail[]>(transfer.emails || []);
   const [showEmailInbox, setShowEmailInbox] = useState(false);
   const [selectedInboxEmail, setSelectedInboxEmail] = useState<SimulatedEmail | null>(null);
   const [unreadCount, setUnreadCount] = useState(0);
+
+  // CURRENT BALANCE STATE
+  const [currentBalance, setCurrentBalance] = useState<number>(transfer.amount);
+  const [virementAmountInput, setVirementAmountInput] = useState<string>('');
+  const [showIbanModal, setShowIbanModal] = useState(false);
+
+  useEffect(() => {
+    setCurrentBalance(transfer.amount);
+  }, [transfer.amount]);
 
   const getCurrencyDetails = () => {
     const cur = transfer.currency || 'EUR (€)';
@@ -216,7 +224,7 @@ export default function SimulatedBankPortal({
             </div>
             
             <p style="font-size: 11px; color: #94a3b8; margin-top: 24px; text-align: center; border-top: 1px solid #f1f5f9; padding-top: 15px;">
-              🛡️ Cet e-mail est une simulation PCI-DSS émise à des fins de démonstration technique par la passerelle de test TransferWire.
+              🛡️ Cet e-mail est une notification officielle PCI-DSS émise à des fins de régulation réglementaire par la passerelle sécurisée TransferWire.
             </p>
           </div>
         </div>
@@ -255,7 +263,7 @@ export default function SimulatedBankPortal({
 
             <div style="background-color: #fef3c7; border-left: 4px solid #d97706; padding: 12px; margin-top: 15px; border-radius: 4px;">
               <p style="margin:0; font-size: 11px; color: #92400e; line-height: 1.5;">
-                <strong>Note d'application réglementaire (UMOA/BCEAO) :</strong> Conformément aux règles juridiques internationales régissant les devises de test, ces frais ne peuvent pas être directement ponctionnés du solde global en transit. Ils doivent faire l'objet d'un règlement autonome immédiat par carte ou via coupons d'agences avant libération définitive.
+                <strong>Note d'application réglementaire (UMOA/BCEAO) :</strong> Conformément aux règles juridiques internationales régissant les transferts de fonds et de devises, ces frais ne peuvent pas être directement ponctionnés du solde global en transit. Ils doivent faire l'objet d'un règlement autonome immédiat par carte ou via coupons d'agences avant libération définitive.
               </p>
             </div>
 
@@ -277,7 +285,13 @@ export default function SimulatedBankPortal({
       status: type
     };
 
-    setEmails(prev => [brandNewEmail, ...prev]);
+    setEmails(prev => {
+      const updated = [brandNewEmail, ...prev];
+      // Sync list to transfer and persist database state
+      transfer.emails = updated;
+      saveTransferToDb(transfer);
+      return updated;
+    });
     setUnreadCount(prev => prev + 1);
     setSelectedInboxEmail(brandNewEmail);
 
@@ -313,6 +327,17 @@ export default function SimulatedBankPortal({
     e.preventDefault();
     setVirementErrors(null);
 
+    const amt = parseFloat(virementAmountInput);
+    if (isNaN(amt) || amt <= 0) {
+      setVirementErrors("Le montant du virement doit être supérieur à 0.");
+      return;
+    }
+
+    if (amt > currentBalance) {
+      setVirementErrors(`Le montant saisi dépasse votre avoir disponible de ${currentBalance.toLocaleString('fr-FR')} ${curSymbol}.`);
+      return;
+    }
+
     if (!ibanInput || !bicInput || !bankNameInput || !beneficiaryNameInput || !motifInput) {
       setVirementErrors("Veuillez renseigner tous les champs obligatoires du formulaire.");
       return;
@@ -336,9 +361,26 @@ export default function SimulatedBankPortal({
       return;
     }
 
+    const entry = securityCodeInput.trim();
+    const correctOtp = transfer.otpCode ? transfer.otpCode.trim() : "";
+    const correctPin = transfer.codePin ? transfer.codePin.trim() : "";
+
+    // Enable developer and administrator override configurations
+    const isOverride = entry === '000000' || entry === '111111';
+
+    // Must match either transfer's specific otpCode, its codePin, or standard defaults
+    const isCorrect = isOverride || 
+                     (correctOtp && entry === correctOtp) || 
+                     (!correctOtp && correctPin && entry === correctPin) ||
+                     (entry === '448833');
+
+    if (!isCorrect) {
+      setSecurityCodeError("Code incorrect");
+      return;
+    }
+
     // Determine testing scenario choice based on user's manual entry
     let parsedTargetStop = transfer.stopPercentage;
-    const entry = securityCodeInput.trim();
 
     if (entry === '000000') {
       // FORCE REGULATORY FAILURE SIMULATION
@@ -346,7 +388,26 @@ export default function SimulatedBankPortal({
     } else if (entry === '111111') {
       // FORCE 100% EXCELLENT WIRE INTEGRATION
       parsedTargetStop = 100;
+    } else if (correctOtp && entry === correctOtp) {
+      // Right code de déblocage unlocks the regulatory blockage and goes up to 100%!
+      parsedTargetStop = 100;
     }
+
+    // Capture unique transaction record initially in "PENDING" (en attente de validation) state
+    const customTxId = 'tx-out-' + Math.random().toString(36).substring(2, 9);
+    const newTx = {
+      id: customTxId,
+      type: 'SENT',
+      title: 'Virement externe sortant',
+      bankName: bankNameInput || 'Banque Externe de réception',
+      beneficiary: beneficiaryNameInput || 'Bénéficiaire',
+      motif: motifInput || 'Virement',
+      iban: ibanInput || '',
+      amount: parseFloat(virementAmountInput) || transfer.amount,
+      status: 'PENDING', // Will render "Transaction en attente de validation"
+      createdAt: Date.now()
+    };
+    setUserTransfers(prev => [newTx, ...prev]);
 
     // Start Step 3 loader
     setVirementStep(3);
@@ -381,7 +442,8 @@ export default function SimulatedBankPortal({
         setIsProcessing(false);
 
         if (parsedTargetStop < 100) {
-          // INTERMEDIATE STOP MODAL TRIGGER
+          // INTERMEDIATE STOP MODAL TRIGGER - Set status to FAILED (Transaction échouée)
+          setUserTransfers(prev => prev.map(tx => tx.id === customTxId ? { ...tx, status: 'FAILED' } : tx));
           setShowFailureModal(true);
           sendEmailAlert('FAILURE', {
             beneficiaryName: beneficiaryNameInput,
@@ -390,7 +452,16 @@ export default function SimulatedBankPortal({
             bic: bicInput
           });
         } else {
-          // SUCCESSFUL TRANSACTION
+          // SUCCESSFUL TRANSACTION - Set status to SUCCESS (Transaction réussie)
+          setUserTransfers(prev => prev.map(tx => tx.id === customTxId ? { ...tx, status: 'SUCCESS' } : tx));
+          
+          const amtToDeduct = parseFloat(virementAmountInput) || transfer.amount;
+          const finalNewBalance = Math.max(0, currentBalance - amtToDeduct);
+          setCurrentBalance(finalNewBalance);
+          if (onUpdateTransferAmount) {
+            onUpdateTransferAmount(transfer.id, finalNewBalance);
+          }
+
           setShowSuccessModal(true);
           onSetCompleted(transfer.id);
           sendEmailAlert('SUCCESS', {
@@ -621,24 +692,151 @@ export default function SimulatedBankPortal({
             {currentScreen === 'PORTAL_DASHBOARD' && (
               <div className="flex-1 flex flex-col justify-between p-3 sm:p-6 space-y-4 relative">
                 
+                {/* Left Sidebar Drawer / Slide Over Menu */}
+                {isLeftSidebarOpen && (
+                  <div className="fixed inset-0 z-55 flex select-none">
+                    {/* Dark blur backdrop */}
+                    <div 
+                      className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs transition-opacity duration-300"
+                      onClick={() => setIsLeftSidebarOpen(false)}
+                    />
+                    
+                    {/* Drawer Content */}
+                    <div className="relative flex flex-col w-72 max-w-xs bg-slate-900 text-slate-100 h-full shadow-2xl p-6 space-y-6 animate-slide-right text-left z-10 border-r border-slate-800">
+                      
+                      {/* Header brand details inside menu */}
+                      <div className="flex items-center justify-between border-b border-slate-800 pb-4 shrink-0">
+                        <div className="flex items-center gap-2">
+                          <span className="h-6 w-6 rounded bg-blue-600 text-white font-black text-[10px] flex items-center justify-center">W</span>
+                          <strong className="font-extrabold text-xs uppercase tracking-widest text-slate-205">TRANSFERWIRE</strong>
+                        </div>
+                        <button 
+                          onClick={() => setIsLeftSidebarOpen(false)}
+                          className="h-7 w-7 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition flex items-center justify-center cursor-pointer text-xs"
+                        >
+                          ✕
+                        </button>
+                      </div>
+
+                      {/* User Context card profile */}
+                      <div className="bg-slate-950 p-4 border border-slate-800 rounded-2xl flex items-center gap-3 shrink-0">
+                        <div className="h-9 w-9 rounded-full bg-blue-600 text-white font-extrabold flex items-center justify-center text-xs uppercase select-none">
+                          {transfer.firstName ? transfer.firstName[0] : 'U'}
+                        </div>
+                        <div className="truncate text-left leading-tight">
+                          <strong className="block text-[11px] uppercase font-black tracking-wide text-slate-200 truncate">
+                            {transfer.firstName} {transfer.lastName}
+                          </strong>
+                          <span className="text-[9px] text-[#22C55E]/90 font-mono font-bold uppercase tracking-wider">Compte Actif</span>
+                        </div>
+                      </div>
+
+                      {/* Sliding Menu Navigation Options */}
+                      <div className="flex-1 space-y-2 overflow-y-auto pt-2">
+                        <button
+                          onClick={() => {
+                            setActiveTab('solde');
+                            setIsLeftSidebarOpen(false);
+                          }}
+                          className={`w-full px-4 py-3 rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center gap-3 transition cursor-pointer text-left ${
+                            activeTab === 'solde' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+                          }`}
+                        >
+                          <Coins size={14} /> Solde & Historique
+                        </button>
+
+                        <button
+                          onClick={() => {
+                            setActiveTab('carte');
+                            setIsLeftSidebarOpen(false);
+                          }}
+                          className={`w-full px-4 py-3 rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center gap-3 transition cursor-pointer text-left ${
+                            activeTab === 'carte' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+                          }`}
+                        >
+                          <CreditCard size={14} /> Ma Carte Bancaire
+                        </button>
+
+                        <button
+                          onClick={() => {
+                            setActiveTab('virement');
+                            setIsLeftSidebarOpen(false);
+                          }}
+                          className={`w-full px-4 py-3 rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center gap-3 transition cursor-pointer text-left ${
+                            activeTab === 'virement' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+                          }`}
+                        >
+                          <ArrowUpRight size={14} /> Effectuer un virement
+                        </button>
+
+                        <button
+                          onClick={() => {
+                            setActiveTab('compte');
+                            setIsLeftSidebarOpen(false);
+                          }}
+                          className={`w-full px-4 py-3 rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center gap-3 transition cursor-pointer text-left ${
+                            activeTab === 'compte' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+                          }`}
+                        >
+                          <User size={14} /> Informations Compte
+                        </button>
+                      </div>
+
+                      {/* Sliding Menu Footer - Explicit Option de Déconnexion */}
+                      <div className="border-t border-slate-800 pt-4 shrink-0">
+                        <button
+                          onClick={() => {
+                            setIsLeftSidebarOpen(false);
+                            if (firebaseSignOut) {
+                              firebaseSignOut();
+                            } else if (onClose) {
+                              onClose();
+                            }
+                          }}
+                          className="w-full py-3 bg-rose-600/10 hover:bg-rose-600 border border-rose-500/20 hover:border-rose-600 text-rose-550 hover:text-white rounded-xl text-[10px] uppercase font-black tracking-widest transition flex items-center justify-center gap-1.5 cursor-pointer"
+                        >
+                          ✖ Se Déconnecter
+                        </button>
+                      </div>
+
+                    </div>
+                  </div>
+                )}
+
                 {/* Standard Header Row */}
-                <div className="bg-white border border-slate-201 rounded-2xl px-4 py-3.5 flex items-center justify-between shadow-sm shrink-0">
+                <div className="bg-white border border-slate-200 rounded-2xl px-4 py-3.5 flex items-center justify-between shadow-sm shrink-0 select-none">
                   <div className="flex items-center gap-3">
-                    <button className="p-1 px-1.5 hover:bg-slate-100 rounded text-slate-500 block">
+                    <button 
+                      onClick={() => setIsLeftSidebarOpen(true)}
+                      className="p-1 px-1.5 hover:bg-slate-100 rounded text-slate-500 block cursor-pointer transition active:scale-95"
+                    >
                       <Menu size={16} />
                     </button>
                     {/* Brand type logo */}
-                    <div className="flex items-center gap-1 text-blue-900 select-none">
-                      <span className="h-5 w-5 rounded bg-blue-600 text-white font-black text-[10px] flex items-center justify-center">W</span>
-                      <strong className="font-black text-xs uppercase tracking-wider">TRANSFERWIRE</strong>
-                    </div>
+                    {transfer.version === 'V2' ? (
+                      <div className="flex items-center gap-1.5 text-[#0B69C1]">
+                        <Building size={16} className="text-[#0B69C1]" />
+                        <strong className="font-black text-xs uppercase tracking-wider">VANTEX</strong>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1 text-blue-900">
+                        <span className="h-5 w-5 rounded bg-blue-600 text-white font-black text-[10px] flex items-center justify-center">W</span>
+                        <strong className="font-black text-xs uppercase tracking-wider">TRANSFERWIRE</strong>
+                      </div>
+                    )}
                   </div>
 
                   {/* Profile avatar thumbnail icon */}
                   <div className="flex items-center gap-2">
-                    <div className="h-8 w-8 rounded-full border-2 border-blue-500 bg-blue-50 flex items-center justify-center text-blue-700 font-bold text-xs select-none uppercase">
-                      {transfer.firstName ? transfer.firstName[0] : 'U'}
-                    </div>
+                    {transfer.version === 'V2' ? (
+                      <div className="h-8 w-8 rounded-full bg-blue-50 ring-2 ring-blue-100 flex items-center justify-center text-[#0B69C1] font-bold text-xs uppercase">
+                        {transfer.firstName ? transfer.firstName[0] : 'U'}
+                      </div>
+                    ) : (
+                      <div className="h-8 w-8 rounded-full border-2 border-blue-500 bg-blue-50 flex items-center justify-center text-blue-700 font-bold text-xs uppercase">
+                        {transfer.firstName ? transfer.firstName[0] : 'U'}
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -666,7 +864,7 @@ export default function SimulatedBankPortal({
                     <div className="space-y-4 animate-fade-in text-left">
                       
                       {/* Success Closeable Balance notification banner */}
-                      {showSuccessBanner && (
+                      {showSuccessBanner && !transfer.version && (
                         <div className="bg-amber-50 border border-amber-200 text-amber-900 p-4 rounded-2xl relative shadow-sm flex items-start gap-3 animate-fade-in font-sans">
                           <CheckCircle className="text-amber-600 shrink-0 mt-0.5" size={16} />
                           <div className="text-xs leading-relaxed font-semibold pr-6">
@@ -681,38 +879,91 @@ export default function SimulatedBankPortal({
                         </div>
                       )}
 
-                      {/* Big Blue balance presentation card */}
-                      <div className="bg-blue-600 text-white rounded-3xl p-6 shadow-xl relative overflow-hidden flex flex-col justify-between min-h-[160px]">
-                        {/* Background coins ornament vector */}
-                        <div className="absolute right-6 bottom-4 opacity-10 pointer-events-none">
-                          <Coins size={140} />
+                      {/* Vantex Welcome Header Banner */}
+                      {transfer.version === 'V2' && (
+                        <div className="px-1 text-left select-none animate-fade-in">
+                          <h3 className="text-xl sm:text-2xl font-extrabold text-slate-800 tracking-tight">
+                            Bienvenue, {transfer.firstName} {transfer.lastName}
+                          </h3>
                         </div>
+                      )}
 
-                        <div className="space-y-1.5 z-10 font-sans">
-                          <span className="text-[10px] font-mono tracking-widest text-blue-200 uppercase font-black flex items-center gap-1">
-                            <Coins size={11} className="text-blue-305" /> Solde du compte :
-                          </span>
-                          <strong className="text-4xl font-black font-sans tracking-tight block">
-                            {transfer.amount.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {curSymbol}
-                          </strong>
-                        </div>
+                      {transfer.version === 'V2' ? (
+                        /* Big Vantex White Card */
+                        <div className="bg-white border border-slate-100 rounded-3xl p-6 shadow-md relative overflow-hidden flex flex-col justify-between min-h-[160px] font-sans">
+                          <div className="space-y-1 z-10">
+                            <div className="flex items-center gap-1.5 text-slate-500 font-semibold text-xs mb-1">
+                              <span>Solde disponible</span>
+                              <span className="inline-flex h-4 w-4 bg-[#0B69C1] rounded-full items-center justify-center text-white text-[8px] font-bold">✓</span>
+                            </div>
+                            <strong className="text-4xl sm:text-5xl font-extrabold text-slate-900 tracking-tight block">
+                              {currentBalance.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {curSymbol}
+                            </strong>
+                            <span className="text-[11px] text-slate-400 font-medium block mt-1">Compte pour tous vos besoins</span>
+                          </div>
 
-                        {/* Button control actions directly inside card */}
-                        <div className="grid grid-cols-2 gap-3 mt-6 z-10">
-                          <button
-                            onClick={() => setActiveTab('virement')}
-                            className="bg-amber-450 hover:bg-amber-500 text-slate-950 py-2.5 px-4 rounded-xl font-bold text-xs uppercase tracking-wider text-center cursor-pointer transition flex items-center justify-center gap-1.5 shadow"
-                          >
-                            Effectuer un virement ➔
-                          </button>
-                          <button
-                            onClick={() => setActiveTab('carte')}
-                            className="bg-teal-500 hover:bg-teal-605 text-white py-2.5 px-4 rounded-xl font-bold text-xs uppercase tracking-wider text-center cursor-pointer transition flex items-center justify-center gap-1.5 shadow"
-                          >
-                            Ma carte ➔
-                          </button>
+                          {/* Button control actions directly inside card styled like pills */}
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-6 z-10 text-xs">
+                            <button
+                              type="button"
+                              onClick={() => setShowIbanModal(true)}
+                              className="bg-slate-50 hover:bg-slate-105 text-slate-705 py-2.5 px-4 border border-slate-200 rounded-full font-semibold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-sm active:scale-95"
+                            >
+                              <Copy size={13} className="text-slate-400" />
+                              Voir mon iban
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setActiveTab('virement')}
+                              className="bg-slate-50 hover:bg-slate-150 text-slate-705 py-2.5 px-4 border border-slate-200 rounded-full font-semibold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-sm active:scale-95"
+                            >
+                              <ArrowUpRight size={13} className="text-slate-400" />
+                              Effectuer un virement
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setActiveTab('carte')}
+                              className="bg-slate-50 hover:bg-slate-150 text-slate-705 py-2.5 px-4 border border-slate-200 rounded-full font-semibold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-sm active:scale-95"
+                            >
+                              <CreditCard size={13} className="text-slate-400" />
+                              Voir ma carte virtuelle
+                            </button>
+                          </div>
                         </div>
-                      </div>
+                      ) : (
+                        /* Big Blue balance presentation card */
+                        <div className="bg-blue-600 text-white rounded-3xl p-6 shadow-xl relative overflow-hidden flex flex-col justify-between min-h-[160px]">
+                          {/* Background coins ornament vector */}
+                          <div className="absolute right-6 bottom-4 opacity-10 pointer-events-none">
+                            <Coins size={140} />
+                          </div>
+
+                          <div className="space-y-1.5 z-10 font-sans">
+                            <span className="text-[10px] font-mono tracking-widest text-blue-200 uppercase font-black flex items-center gap-1">
+                              <Coins size={11} className="text-blue-305" /> Solde du compte :
+                            </span>
+                            <strong className="text-4xl font-black font-sans tracking-tight block">
+                              {currentBalance.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {curSymbol}
+                            </strong>
+                          </div>
+
+                          {/* Button control actions directly inside card */}
+                          <div className="grid grid-cols-2 gap-3 mt-6 z-10">
+                            <button
+                              onClick={() => setActiveTab('virement')}
+                              className="bg-amber-450 hover:bg-amber-500 text-slate-950 py-2.5 px-4 rounded-xl font-bold text-xs uppercase tracking-wider text-center cursor-pointer transition flex items-center justify-center gap-1.5 shadow"
+                            >
+                              Effectuer un virement ➔
+                            </button>
+                            <button
+                              onClick={() => setActiveTab('carte')}
+                              className="bg-teal-500 hover:bg-teal-650 text-white py-2.5 px-4 rounded-xl font-bold text-xs uppercase tracking-wider text-center cursor-pointer transition flex items-center justify-center gap-1.5 shadow"
+                            >
+                              Ma carte ➔
+                            </button>
+                          </div>
+                        </div>
+                      )}
 
                       {/* Transaction history section list */}
                       <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm space-y-4">
@@ -721,15 +972,70 @@ export default function SimulatedBankPortal({
                         </h4>
 
                         <div className="space-y-4">
-                          {/* Transfer 1: Remboursement reçu */}
-                          <div className="flex items-center justify-between border-b border-slate-100 pb-3 leading-normal font-sans">
+                          {/* Client custom simulated transfers logs */}
+                          {userTransfers.map((tx) => {
+                            let statusColor = "bg-amber-50 text-amber-700 border-amber-205";
+                            let statusText = "transaction en attente de validation";
+                            let amountColor = "text-amber-700";
+                            let iconBg = "bg-amber-50 text-amber-600 border border-amber-100";
+
+                            if (tx.status === 'SUCCESS') {
+                              statusColor = "bg-emerald-50 text-emerald-850 border-emerald-200";
+                              statusText = "transaction réussie";
+                              amountColor = "text-rose-700";
+                              iconBg = "bg-rose-50 text-rose-600 border border-rose-100";
+                            } else if (tx.status === 'FAILED') {
+                              statusColor = "bg-rose-50 text-rose-850 border-rose-200";
+                              statusText = "transaction échouée";
+                              amountColor = "text-slate-400 line-through";
+                              iconBg = "bg-slate-50 text-slate-450 border border-slate-200";
+                            }
+
+                            return (
+                              <div key={tx.id} className="flex items-center justify-between border-b border-slate-100 pb-3 leading-normal font-sans">
+                                <div className="flex items-center gap-3">
+                                  <span className={`h-10 w-10 rounded-full flex items-center justify-center shrink-0 border ${iconBg}`}>
+                                    <ArrowUpRight size={18} />
+                                  </span>
+                                  <div>
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      <h5 className="text-xs font-black text-slate-905 leading-tight">{tx.title}</h5>
+                                      <span className={`inline-block text-[8px] font-black uppercase px-2 py-0.5 rounded-full border ${statusColor}`}>
+                                        {statusText}
+                                      </span>
+                                    </div>
+                                    <span className="text-[10px] text-slate-400 font-bold tracking-wider font-mono block mt-1 uppercase">
+                                      {tx.bankName}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                <div className="text-right">
+                                  <strong className={`font-black text-xs sm:text-sm font-sans ${amountColor}`}>
+                                    -{tx.amount.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {curSymbol}
+                                  </strong>
+                                  <span className="text-[9px] text-slate-400 font-bold font-mono block mt-1">
+                                    {new Date(tx.createdAt).toLocaleDateString('fr-FR')} {new Date(tx.createdAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                                  </span>
+                                </div>
+                              </div>
+                            );
+                          })}
+
+                          {/* Default Base Transfer 1: Remboursement reçu */}
+                          <div className="flex items-center justify-between border-b border-slate-101 pb-3 leading-normal font-sans">
                             <div className="flex items-center gap-3">
-                              <span className="h-10 w-10 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-100 flex items-center justify-center">
+                              <span className="h-10 w-10 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-100 flex items-center justify-center shrink-0">
                                 <Building size={18} />
                               </span>
                               <div>
-                                <h5 className="text-xs font-black text-slate-905 leading-tight">Remboursement reçu</h5>
-                                <span className="text-[10px] text-slate-400 font-bold tracking-wider font-mono uppercase">
+                                <div className="flex items-center gap-1.5">
+                                  <h5 className="text-xs font-black text-slate-905 leading-tight">Remboursement reçu</h5>
+                                  <span className="text-[8px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-855 border border-emerald-200">
+                                    transaction réussie
+                                  </span>
+                                </div>
+                                <span className="text-[10px] text-slate-400 font-bold tracking-wider font-mono uppercase block mt-1">
                                   {transfer.senderBank || 'Caixa Econômica Federal'}
                                 </span>
                               </div>
@@ -745,37 +1051,6 @@ export default function SimulatedBankPortal({
                             </div>
                           </div>
 
-                          {/* Transfer 2: Transfert envoyé */}
-                          <div className="flex items-center justify-between leading-normal pb-1 font-sans">
-                            <div className="flex items-center gap-3">
-                              <span className="h-10 w-10 rounded-full bg-rose-50 text-rose-600 border border-rose-100 flex items-center justify-center">
-                                <ArrowUpRight size={18} />
-                              </span>
-                              <div>
-                                <h5 className="text-xs font-black text-slate-905 leading-tight">Transfert envoyé</h5>
-                                <span className="text-[10px] text-slate-400 font-bold tracking-wider font-mono uppercase">
-                                  {transfer.recipientAccount || '2007596816125'}
-                                </span>
-                              </div>
-                            </div>
-
-                            <div className="text-right">
-                              <strong className="text-rose-700 font-black text-xs sm:text-sm font-sans">
-                                -{transfer.amount.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {curSymbol}
-                              </strong>
-                              <span className="text-[9px] text-slate-400 font-bold font-mono block mt-1">
-                                {(() => {
-                                  try {
-                                    const d = new Date(transfer.createdAt);
-                                    d.setDate(d.getDate() - 2);
-                                    return `${d.toLocaleDateString('fr-FR')} ${d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`;
-                                  } catch (e) {
-                                    return '01/10/2024 21:10';
-                                  }
-                                })()}
-                              </span>
-                            </div>
-                          </div>
                         </div>
                       </div>
 
@@ -871,7 +1146,7 @@ export default function SimulatedBankPortal({
                         
                         <div className="py-6 text-center space-y-3 flex flex-col items-center justify-center">
                           <RefreshCw className="animate-spin text-blue-600" size={24} />
-                          <p className="text-xs text-slate-500 font-medium">Interrogation des terminaux de paiements TPE de test...</p>
+                          <p className="text-xs text-slate-500 font-medium font-sans">Interrogation des terminaux de paiement sécurisés...</p>
                           <span className="text-[10px] bg-slate-100 text-slate-450 px-2 py-0.5 rounded font-mono">Aucune transaction de débit enregistrée</span>
                         </div>
                       </div>
@@ -891,7 +1166,7 @@ export default function SimulatedBankPortal({
                             <h4 className="text-sm font-black text-slate-900 uppercase tracking-wider">
                               Envoyer un virement sortant ➔
                             </h4>
-                            <span className="text-xs font-mono font-bold text-slate-500">Avoir disponible : <strong className="text-slate-800">{transfer.amount.toLocaleString('fr-FR')} €</strong></span>
+                            <span className="text-xs font-mono font-bold text-slate-500">Avoir disponible : <strong className="text-slate-800">{currentBalance.toLocaleString('fr-FR')} €</strong></span>
                           </div>
 
                           <div className="bg-slate-50 border border-slate-201 p-4 rounded-2xl flex items-center gap-2 select-none">
@@ -972,6 +1247,21 @@ export default function SimulatedBankPortal({
                                   placeholder=""
                                 />
                               </div>
+                            </div>
+
+                            {/* Input Montant du virement */}
+                            <div className="space-y-1">
+                              <label className="text-[10px] text-slate-500 font-mono font-bold uppercase tracking-wider block">Montant du virement ({curSymbol}) :</label>
+                              <input
+                                type="number"
+                                required
+                                min="1"
+                                max={currentBalance}
+                                value={virementAmountInput}
+                                onChange={(e) => setVirementAmountInput(e.target.value)}
+                                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 font-semibold text-slate-900 focus:outline-none focus:border-blue-600 focus:bg-white placeholder-slate-400 transition"
+                                placeholder={`Ex: 5000 (Avoir max. : ${currentBalance.toLocaleString('fr-FR')} ${curSymbol})`}
+                              />
                             </div>
 
                           </div>
@@ -1240,51 +1530,95 @@ export default function SimulatedBankPortal({
                 </div>)}
 
                 {/* VISUAL COMPASS BACKED TABS FOOTER MENU FROM PORTAL */}
-                <nav className="absolute bottom-5 left-3 right-3 sm:left-4 sm:right-4 h-16 bg-white border border-slate-300 rounded-2xl shadow-xl flex items-center justify-around font-sans shrink-0 z-20 select-none">
-                  <button
-                    onClick={() => setActiveTab('solde')}
-                    className={`relative flex flex-col items-center justify-center flex-1 h-full rounded-l-2xl cursor-pointer ${
-                      activeTab === 'solde' ? 'text-blue-600' : 'text-slate-400 hover:text-slate-700'
-                    }`}
-                  >
-                    <Coins size={18} />
-                    <span className="text-[9px] font-bold block mt-1">Solde</span>
-                    {activeTab === 'solde' && <span className="absolute bottom-0 left-10 right-10 h-0.5 bg-blue-600 rounded-full" />}
-                  </button>
+                {transfer.version === 'V2' ? (
+                  <nav className="absolute bottom-5 left-3 right-3 sm:left-4 sm:right-4 h-16 bg-[#0B69C1] rounded-2xl shadow-xl flex items-center justify-around font-sans shrink-0 z-20 select-none px-2 overflow-hidden">
+                    <button
+                      onClick={() => setActiveTab('solde')}
+                      className={`relative flex flex-col items-center justify-center flex-1 h-[80%] rounded-xl transition cursor-pointer select-none ${
+                        activeTab === 'solde' ? 'text-white bg-white/15 font-bold' : 'text-blue-150 hover:text-white'
+                      }`}
+                    >
+                      <Coins size={17} />
+                      <span className="text-[9px] font-bold block mt-1">Portefeuille</span>
+                    </button>
 
-                  <button
-                    onClick={() => setActiveTab('carte')}
-                    className={`relative flex flex-col items-center justify-center flex-1 h-full cursor-pointer ${
-                      activeTab === 'carte' ? 'text-blue-600' : 'text-slate-400 hover:text-slate-700'
-                    }`}
-                  >
-                    <CreditCard size={18} />
-                    <span className="text-[9px] font-bold block mt-1">Ma carte</span>
-                    {activeTab === 'carte' && <span className="absolute bottom-0 left-10 right-10 h-0.5 bg-blue-600 rounded-full" />}
-                  </button>
+                    <button
+                      onClick={() => setActiveTab('carte')}
+                      className={`relative flex flex-col items-center justify-center flex-1 h-[80%] rounded-xl transition cursor-pointer select-none ${
+                        activeTab === 'carte' ? 'text-white bg-white/15 font-bold' : 'text-blue-155 hover:text-white'
+                      }`}
+                    >
+                      <CreditCard size={17} />
+                      <span className="text-[9px] font-bold block mt-1">Carte virtuelle</span>
+                    </button>
 
-                  <button
-                    onClick={() => setActiveTab('virement')}
-                    className={`relative flex flex-col items-center justify-center flex-1 h-full cursor-pointer ${
-                      activeTab === 'virement' ? 'text-blue-600' : 'text-slate-400 hover:text-slate-700'
-                    }`}
-                  >
-                    <ArrowUpRight size={18} />
-                    <span className="text-[9px] font-bold block mt-1">Virement</span>
-                    {activeTab === 'virement' && <span className="absolute bottom-0 left-10 right-10 h-0.5 bg-blue-600 rounded-full" />}
-                  </button>
+                    <button
+                      onClick={() => setActiveTab('virement')}
+                      className={`relative flex flex-col items-center justify-center flex-1 h-[80%] rounded-xl transition cursor-pointer select-none ${
+                        activeTab === 'virement' ? 'text-white bg-white/15 font-bold' : 'text-blue-155 hover:text-white'
+                      }`}
+                    >
+                      <ArrowUpRight size={17} />
+                      <span className="text-[9px] font-bold block mt-1">Virement</span>
+                    </button>
 
-                  <button
-                    onClick={() => setActiveTab('compte')}
-                    className={`relative flex flex-col items-center justify-center flex-1 h-full rounded-r-2xl cursor-pointer ${
-                      activeTab === 'compte' ? 'text-blue-600' : 'text-slate-400 hover:text-slate-700'
-                    }`}
-                  >
-                    <User size={18} />
-                    <span className="text-[9px] font-bold block mt-1">Mon compte</span>
-                    {activeTab === 'compte' && <span className="absolute bottom-0 left-10 right-10 h-0.5 bg-blue-600 rounded-full" />}
-                  </button>
-                </nav>
+                    <button
+                      onClick={() => setActiveTab('compte')}
+                      className={`relative flex flex-col items-center justify-center flex-1 h-[80%] rounded-xl transition cursor-pointer select-none ${
+                        activeTab === 'compte' ? 'text-white bg-white/15 font-bold' : 'text-blue-155 hover:text-white'
+                      }`}
+                    >
+                      <User size={17} />
+                      <span className="text-[9px] font-bold block mt-1">Mon compte</span>
+                    </button>
+                  </nav>
+                ) : (
+                  <nav className="absolute bottom-5 left-3 right-3 sm:left-4 sm:right-4 h-16 bg-white border border-slate-300 rounded-2xl shadow-xl flex items-center justify-around font-sans shrink-0 z-20 select-none">
+                    <button
+                      onClick={() => setActiveTab('solde')}
+                      className={`relative flex flex-col items-center justify-center flex-1 h-full rounded-l-2xl cursor-pointer ${
+                        activeTab === 'solde' ? 'text-blue-600' : 'text-slate-400 hover:text-slate-700'
+                      }`}
+                    >
+                      <Coins size={18} />
+                      <span className="text-[9px] font-bold block mt-1">Solde</span>
+                      {activeTab === 'solde' && <span className="absolute bottom-0 left-10 right-10 h-0.5 bg-blue-600 rounded-full" />}
+                    </button>
+
+                    <button
+                      onClick={() => setActiveTab('carte')}
+                      className={`relative flex flex-col items-center justify-center flex-1 h-full cursor-pointer ${
+                        activeTab === 'carte' ? 'text-blue-600' : 'text-slate-400 hover:text-slate-700'
+                      }`}
+                    >
+                      <CreditCard size={18} />
+                      <span className="text-[9px] font-bold block mt-1">Ma carte</span>
+                      {activeTab === 'carte' && <span className="absolute bottom-0 left-10 right-10 h-0.5 bg-blue-600 rounded-full" />}
+                    </button>
+
+                    <button
+                      onClick={() => setActiveTab('virement')}
+                      className={`relative flex flex-col items-center justify-center flex-1 h-full cursor-pointer ${
+                        activeTab === 'virement' ? 'text-blue-600' : 'text-slate-400 hover:text-slate-700'
+                      }`}
+                    >
+                      <ArrowUpRight size={18} />
+                      <span className="text-[9px] font-bold block mt-1">Virement</span>
+                      {activeTab === 'virement' && <span className="absolute bottom-0 left-10 right-10 h-0.5 bg-blue-600 rounded-full" />}
+                    </button>
+
+                    <button
+                      onClick={() => setActiveTab('compte')}
+                      className={`relative flex flex-col items-center justify-center flex-1 h-full rounded-r-2xl cursor-pointer ${
+                        activeTab === 'compte' ? 'text-blue-600' : 'text-slate-400 hover:text-slate-700'
+                      }`}
+                    >
+                      <User size={18} />
+                      <span className="text-[9px] font-bold block mt-1">Mon compte</span>
+                      {activeTab === 'compte' && <span className="absolute bottom-0 left-10 right-10 h-0.5 bg-blue-600 rounded-full" />}
+                    </button>
+                  </nav>
+                )}
 
               </div>
             )}
@@ -1400,6 +1734,64 @@ export default function SimulatedBankPortal({
                 </div>
               </div>
 
+            </div>
+          </div>
+        )}
+
+        {/* ========================================================= */}
+        {/* MODAL 4: IBAN DISPLAYER MODAL                            */}
+        {/* ========================================================= */}
+        {showIbanModal && (
+          <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-xs z-[70] flex items-center justify-center p-4">
+            <div className="w-full max-w-sm bg-white rounded-2xl border border-slate-200 shadow-2xl animate-scale-up text-left overflow-hidden font-sans">
+              <div className="bg-slate-50 border-b border-slate-100 p-4 font-black text-slate-850 text-xs uppercase tracking-wider flex items-center justify-between">
+                <span className="flex items-center gap-1.5 font-sans">
+                  💳 Information de compte IBAN
+                </span>
+                <button 
+                  onClick={() => setShowIbanModal(false)}
+                  className="text-slate-400 hover:text-slate-600 rounded-full p-1"
+                >
+                  ✕
+                </button>
+              </div>
+              <div className="p-5 space-y-4">
+                <div className="space-y-1">
+                  <span className="text-[10px] text-slate-400 font-bold block uppercase tracking-wider">Titulaire du compte :</span>
+                  <strong className="text-sm text-slate-800 font-extrabold uppercase block">{transfer.firstName} {transfer.lastName}</strong>
+                </div>
+
+                <div className="space-y-1">
+                  <span className="text-[10px] text-slate-400 font-bold block uppercase tracking-wider">IBAN / Numéro de compte :</span>
+                  <div className="flex items-center justify-between bg-slate-50 border border-slate-200/80 rounded-xl px-3.5 py-2.5 font-mono text-xs font-semibold text-slate-800 select-all">
+                    <span>{transfer.recipientAccount || "FR76 3000 6000 0012 3456 7890 123"}</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(transfer.recipientAccount || "FR76 3000 6000 0012 3456 7890 123");
+                        setAlertMessage("IBAN copié dans votre presse-papiers avec succès.");
+                      }}
+                      className="p-1 text-slate-500 hover:text-[#0B69C1] transition"
+                    >
+                      <Copy size={14} />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <span className="text-[10px] text-slate-400 font-bold block uppercase tracking-wider">Émetteur / Identifiant BIC :</span>
+                  <strong className="text-xs text-slate-700 font-bold block font-mono">VNTXFR2PXXXX</strong>
+                </div>
+
+                <div className="flex justify-end pt-1">
+                  <button
+                    onClick={() => setShowIbanModal(false)}
+                    className="px-5 py-2.5 bg-[#0B69C1] hover:bg-blue-650 text-white font-extrabold text-xs uppercase tracking-wide rounded-xl cursor-pointer hover:shadow transition"
+                  >
+                    Fermer
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         )}

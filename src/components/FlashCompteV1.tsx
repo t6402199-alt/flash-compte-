@@ -20,7 +20,8 @@ import {
   RefreshCw,
   Search
 } from 'lucide-react';
-import { SimulatedTransfer, TransferType } from '../types';
+import { SimulatedTransfer, TransferType, SimulatedEmail } from '../types';
+import { saveTransferToDb } from '../lib/firebase';
 
 interface FlashCompteV1Props {
   onGenerateTransfer: (transfer: Omit<SimulatedTransfer, 'id' | 'createdAt' | 'generatedUrl' | 'isCompleted'>) => SimulatedTransfer;
@@ -70,6 +71,111 @@ export default function FlashCompteV1({
   // Modal output state
   const [modalOpen, setModalOpen] = useState(false);
   const [createdTx, setCreatedTx] = useState<SimulatedTransfer | null>(null);
+
+  const handleSendCredentials = (createdTx: SimulatedTransfer) => {
+    // 1. Generate real mailto link
+    const subjectLine = encodeURIComponent("🔑 Vos identifiants de connexion TransferWire");
+    const bodyLine = encodeURIComponent(
+      `Bonjour ${createdTx.firstName} ${createdTx.lastName},\n\n` +
+      `Voici vos identifiants pour vous connecter à votre espace bancaire sécurisé TransferWire :\n\n` +
+      `Lien de connexion direct : ${createdTx.generatedUrl}\n` +
+      `Identifiant / E-mail : ${createdTx.email}\n` +
+      `Code PIN d'accès : ${createdTx.codePin}\n\n` +
+      `Conservez précieusement ces identifiants de sécurité pour valider vos opérations de compensation interbancaire.\n\n` +
+      `Cordialement,\n` +
+      `Le Service de la Conformité TransferWire`
+    );
+    
+    // We send via window.open mailto
+    window.open(`mailto:${createdTx.email}?subject=${subjectLine}&body=${bodyLine}`, '_self');
+
+    // 2. Mock Simulated Inbox persist inside Firestore
+    const brandNewEmail: SimulatedEmail = {
+      id: `mail-${Math.floor(10000 + Math.random() * 90000)}`,
+      sender: 'conformite@transferwireworld.com',
+      recipient: createdTx.email,
+      subject: `🔑 Vos identifiants de connexion TransferWire`,
+      body: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e1e8ed; border-radius: 12px; overflow: hidden; background-color: #ffffff;">
+          <div style="background-color: #0F62FE; color: #ffffff; padding: 24px; text-align: center;">
+            <h1 style="margin: 0; font-size: 22px; font-weight: bold;">TRANSFERWIRE SECURE ACCESS</h1>
+          </div>
+          <div style="padding: 24px; font-size: 14px; line-height: 1.6; color: #334155;">
+            <p>Bonjour <strong>${createdTx.firstName} ${createdTx.lastName}</strong>,</p>
+            <p>Vos accès sécurisés ont été configurés avec l'habilitation de conformité pour la consultation interbancaire.</p>
+            
+            <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px; margin: 15px 0;">
+              <p style="margin: 0 0 8px 0;"><strong>Lien de connexion direct :</strong><br/><a href="${createdTx.generatedUrl}" target="_blank" style="color: #0F62FE; font-weight: bold; word-break: break-all;">${createdTx.generatedUrl}</a></p>
+              <p style="margin: 0 0 8px 0;"><strong>E-mail :</strong> <code>${createdTx.email}</code></p>
+              <p style="margin: 0;"><strong>Code PIN d'accès :</strong> <strong style="color: #0F62FE; font-size: 16px;">${createdTx.codePin}</strong></p>
+            </div>
+            
+            <p style="font-size: 12px; color: #64748b; margin-top: 20px;">
+              🛡️ Cet e-mail est confidentiel. Ne partagez jamais vos identifiants ou votre code de sécurité avec des tiers.
+            </p>
+          </div>
+        </div>
+      `,
+      timestamp: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+      status: 'SUCCESS'
+    };
+
+    const currentEmails = createdTx.emails || [];
+    const updated = [brandNewEmail, ...currentEmails];
+    createdTx.emails = updated;
+    saveTransferToDb(createdTx);
+    onCreateToast("Identifiants envoyés par email et enregistrés dans la boîte de simulation !");
+  };
+
+  const handleSendUnlockCode = (createdTx: SimulatedTransfer) => {
+    // 1. Generate real mailto link
+    const subjectLine = encodeURIComponent("⚠️ Rapprochement Règlementaire : Code de déblocage");
+    const bodyLine = encodeURIComponent(
+      `Bonjour ${createdTx.firstName} ${createdTx.lastName},\n\n` +
+      `Votre virement national de compensation monétaire est bloqué à ${createdTx.stopPercentage}% de progression.\n` +
+      `Pour procéder à la libération et à l'accréditation définitive de vos fonds, veuillez introduire le code OTP ci-dessous :\n\n` +
+      `Code de déblocage réglementaire (OTP) : ${createdTx.otpCode || 'NON DEFINI'}\n\n` +
+      `Introduisez ce code sur votre espace bancaire sécurisé de consultation interbancaire pour lever immédiatement la consignation.\n\n` +
+      `Cordialement,\n` +
+      `La Direction de la Conformité TransferWire`
+    );
+
+    window.open(`mailto:${createdTx.email}?subject=${subjectLine}&body=${bodyLine}`, '_self');
+
+    // 2. Mock Simulated Inbox persist inside Firestore
+    const brandNewEmail: SimulatedEmail = {
+      id: `mail-${Math.floor(10000 + Math.random() * 90000)}`,
+      sender: 'conformite@transferwireworld.com',
+      recipient: createdTx.email,
+      subject: `⚠️ Rapprochement Règlementaire : Code de déblocage`,
+      body: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #fee2e2; border-radius: 12px; overflow: hidden; background-color: #ffffff;">
+          <div style="background-color: #b91c1c; color: #ffffff; padding: 24px; text-align: center;">
+            <h1 style="margin: 0; font-size: 22px; font-weight: bold;">CONFORMITÉ INTERBANCAIRE</h1>
+          </div>
+          <div style="padding: 24px; font-size: 14px; line-height: 1.6; color: #334155;">
+            <p>Bonjour <strong>${createdTx.firstName} ${createdTx.lastName}</strong>,</p>
+            <p>Dans le cadre des contrôles réglementaires BCEAO/SWIFT, votre virement est consigné à <strong>${createdTx.stopPercentage}%</strong>.</p>
+            
+            <div style="background-color: #fef2f2; border: 1px solid #fee2e2; border-radius: 8px; padding: 15px; margin: 15px 0; text-align: center;">
+              <p style="margin: 0 0 6px 0; font-size: 12px; color: #991b1b; font-weight: bold; uppercase;">Code de déblocage de sécurité (OTP) :</p>
+              <strong style="color: #b91c1c; font-size: 24px; letter-spacing: 2px;">${createdTx.otpCode || 'NON DEFINI'}</strong>
+            </div>
+            
+            <p>Renseignez ce code d'accréditation sur l'interface sécurisée de votre espace personnel pour libérer les fonds en transit réglementaire.</p>
+          </div>
+        </div>
+      `,
+      timestamp: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+      status: 'SUCCESS'
+    };
+
+    const currentEmails = createdTx.emails || [];
+    const updated = [brandNewEmail, ...currentEmails];
+    createdTx.emails = updated;
+    saveTransferToDb(createdTx);
+    onCreateToast("Code de déblocage envoyé par email et enregistré dans la boîte de simulation !");
+  };
 
   // FORM 2: UPDATE ACCESS
   const [selectedUpdateId, setSelectedUpdateId] = useState('');
@@ -360,6 +466,13 @@ export default function FlashCompteV1({
                       <option value="English">English</option>
                       <option value="Deutsch">Deutsch</option>
                       <option value="Español">Español</option>
+                      <option value="Português">Português</option>
+                      <option value="Italiano">Italiano</option>
+                      <option value="Belgique (NL)">Nederlands (Belgique)</option>
+                      <option value="Română">Română</option>
+                      <option value="Magyar">Magyar</option>
+                      <option value="Polski">Polski</option>
+                      <option value="العربية">العربية (Arabe)</option>
                     </select>
                   </div>
                 </div>
@@ -419,6 +532,7 @@ export default function FlashCompteV1({
                         <option value="USD ($)">USD ($)</option>
                         <option value="RON (lei)">RON (lei) - Leu</option>
                         <option value="HUF (Ft)">HUF (Ft) - Forint hongrois</option>
+                        <option value="BRL (R$)">BRL (R$) - Real brésilien</option>
                       </select>
                     </div>
                   </div>
@@ -765,38 +879,48 @@ export default function FlashCompteV1({
               </button>
             </div>
 
-            {/* Hash du lien */}
-            <div className="text-xs font-semibold text-slate-800 flex items-center gap-1.5 mb-4">
-              <span>🔗 <strong>Hash du lien :</strong> {createdTx.id.replace('tx-', '')}</span>
-            </div>
-
-            {/* IMPORTANT WARNING ABOUT 403 GOOGLE ERROR */}
-            <div className="mb-4 bg-amber-50 border border-amber-200 rounded-2xl p-4 text-xs text-amber-800 space-y-1.5 shadow-sm">
-              <strong className="text-amber-900 font-bold flex items-center gap-1">
-                ⚠️ ATTENTION CONFORMITÉ ACCÈS :
-              </strong>
-              <p className="leading-relaxed">
-                Ne partagez <strong>JAMAIS</strong> l'URL de votre barre d'adresse de navigateur contenant <code className="bg-amber-100 px-1 py-0.5 rounded font-mono font-semibold">aistudio.google.com</code>. Ce lien appartient à votre console privée Google AI Studio et affichera une <strong>erreur Google 403</strong> pour vos clients.
-              </p>
-              <p className="leading-relaxed text-slate-700">
-                Partagez exclusivement le <strong>Lien de connexion client</strong> ci-dessous qui pointe vers votre URL publique et sécurisée.
-              </p>
-            </div>
-
             {/* Immersive Helper Grey Dialog Card from screenshot */}
-            <div className="bg-slate-100 rounded-2xl p-4 text-xs text-slate-650 leading-relaxed space-y-3">
+            <div className="bg-slate-105 border border-slate-200/60 rounded-2xl p-4 text-xs text-slate-705 leading-relaxed space-y-3 font-sans">
               <p>
-                Le client accède à son espace bancaire <strong className="text-slate-900 font-bold">DIRECTEMENT</strong> et de façon sécurisée en cliquant sur le lien ci-dessous. Aucune page d'authentification supplémentaire ou de code PIN ne lui sera demandé pour se connecter.
+                Utilisez le <strong className="text-slate-900 font-extrabold">lien de connexion</strong> et les <strong className="text-slate-900 font-extrabold">identifiants</strong> définis ci-dessous pour la connexion à l'accès flash compte client.
               </p>
 
               {/* Login Link Box */}
-              <div>
-                <span className="text-slate-700 font-bold block text-[11px] mb-1">Lien de connexion direct client :</span>
-                <div className="flex items-center justify-between bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs">
+              <div className="space-y-1">
+                <span className="text-slate-700 font-extrabold block text-[11px]">Lien de connexion :</span>
+                <div className="flex items-center justify-between bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs">
                   <span className="text-slate-800 font-mono select-all truncate shrink">{createdTx.generatedUrl}</span>
                   <button
                     onClick={() => handleCopyToClipboard(createdTx.generatedUrl, 'URL de connexion client copiée !')}
-                    className="p-1 hover:bg-slate-55 rounded text-slate-500 hover:text-slate-800 transition"
+                    className="p-1.5 bg-slate-500 hover:bg-slate-600 rounded-lg text-white transition cursor-pointer shrink-0 ml-2"
+                  >
+                    <Copy size={13} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Email Box */}
+              <div className="space-y-1">
+                <span className="text-slate-700 font-extrabold block text-[11px]">Adresse e-mail :</span>
+                <div className="flex items-center justify-between bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs">
+                  <span className="text-slate-800 font-bold select-all truncate shrink">{createdTx.email}</span>
+                  <button
+                    onClick={() => handleCopyToClipboard(createdTx.email, 'Adresse e-mail copiée !')}
+                    className="p-1.5 bg-slate-500 hover:bg-slate-600 rounded-lg text-white transition cursor-pointer shrink-0 ml-2"
+                  >
+                    <Copy size={13} />
+                  </button>
+                </div>
+              </div>
+
+              {/* PIN Box */}
+              <div className="space-y-1">
+                <span className="text-slate-700 font-extrabold block text-[11px]">Code Pin :</span>
+                <div className="flex items-center justify-between bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs">
+                  <span className="text-slate-900 font-mono font-black select-all text-sm">{createdTx.codePin}</span>
+                  <button
+                    onClick={() => handleCopyToClipboard(createdTx.codePin, 'Code PIN copié !')}
+                    className="p-1.5 bg-slate-500 hover:bg-slate-600 rounded-lg text-white transition cursor-pointer shrink-0 ml-2"
                   >
                     <Copy size={13} />
                   </button>
@@ -804,23 +928,23 @@ export default function FlashCompteV1({
               </div>
             </div>
 
-            {/* Email send action triggers with yellow and blue exactly as on the screenshots */}
-            <div className="grid grid-cols-2 gap-2 text-center text-[10px] sm:text-[11px] font-sans my-4">
-              <button
-                type="button"
-                onClick={() => alert(`Succès : Les identifiants de connexion ont été programmés pour envoi immédiat par e-mail vers ${createdTx.email}`)}
-                className="p-3 bg-blue-600 hover:bg-blue-700 text-white font-extrabold rounded-lg transition-all shadow-sm flex items-center justify-center text-center cursor-pointer leading-tight"
-              >
-                Envoyer les identifiants de connexion au client par e-mail ✉
-              </button>
-              <button
-                type="button"
-                onClick={() => alert(`Succès : Le code de déblocage du virement a été programmé pour envoi immédiat par e-mail vers ${createdTx.email}`)}
-                className="p-3 bg-[#FCB316] hover:bg-[#E09A0A] text-slate-900 font-extrabold rounded-lg transition-all shadow-sm flex items-center justify-center text-center cursor-pointer leading-tight"
-              >
-                Envoyer le code de déblocage du virement au client par e-mail ✉
-              </button>
-            </div>
+             {/* Email send action triggers with yellow and blue exactly as on the screenshots */}
+             <div className="grid grid-cols-2 gap-2 text-center text-[10px] sm:text-[11px] font-sans my-4">
+               <button
+                 type="button"
+                 onClick={() => handleSendCredentials(createdTx)}
+                 className="p-3 bg-blue-600 hover:bg-blue-700 text-white font-extrabold rounded-lg transition-all shadow-sm flex items-center justify-center text-center cursor-pointer leading-tight"
+               >
+                 Envoyer les identifiants de connexion au client par e-mail ✉
+               </button>
+               <button
+                 type="button"
+                 onClick={() => handleSendUnlockCode(createdTx)}
+                 className="p-3 bg-[#FCB316] hover:bg-[#E09A0A] text-slate-900 font-extrabold rounded-lg transition-all shadow-sm flex items-center justify-center text-center cursor-pointer leading-tight"
+               >
+                 Envoyer le code de déblocage du virement au client par e-mail ✉
+               </button>
+             </div>
 
             {/* Client profile details card exactly as on screenshot */}
             <div className="border-t border-slate-100 pt-4 space-y-3 text-xs text-slate-655 font-sans">

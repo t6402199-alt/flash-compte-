@@ -77,6 +77,17 @@ export interface SimulatedTransfer {
   
   // Simulation progressive state (for active rendering)
   isCompleted: boolean;
+  emails?: SimulatedEmail[];
+}
+
+export interface SimulatedEmail {
+  id: string;
+  sender: string;
+  recipient: string;
+  subject: string;
+  body: string;
+  timestamp: string;
+  status: 'SUCCESS' | 'FAILURE';
 }
 
 export interface Client {
@@ -92,5 +103,6 @@ export interface Client {
   createdAt: number;
   lastLogin?: number;
   dateExpiration?: string;
+  name?: string;
 }
 

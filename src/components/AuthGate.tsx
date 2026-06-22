@@ -14,9 +14,11 @@ import {
 } from 'lucide-react';
 import { 
   signInWithEmailAndPassword, 
-  createUserWithEmailAndPassword 
+  createUserWithEmailAndPassword,
+  sendPasswordResetEmail
 } from 'firebase/auth';
-import { auth, saveTransferToDb, getTransfersByEmailFromDb, findTransferByAnyField, getClientByTokenFromDb, authenticateClientViaFirestore, saveClientToDb, getClientByUidFromDb } from '../lib/firebase';
+import { auth, db, saveTransferToDb, getTransfersByEmailFromDb, findTransferByAnyField, getClientByTokenFromDb, authenticateClientViaFirestore, saveClientToDb, getClientByUidFromDb } from '../lib/firebase';
+import { collection, query, where, getDocs } from 'firebase/firestore';
 import { SimulatedTransfer, Client } from '../types';
 
 const getPublicOrigin = () => {
@@ -51,16 +53,18 @@ export default function AuthGate({
   onBackToHome,
   isStrictClientMode = false
 }: AuthGateProps) {
-  const [activeTab, setActiveTab] = useState<'beneficiary' | 'admin'>('admin');
+  const [activeTab, setActiveTab] = useState<'beneficiary' | 'admin'>(() => {
+    return isStrictClientMode ? 'beneficiary' : 'admin';
+  });
 
   // Sync state if initialTab prop changes
   React.useEffect(() => {
-    setActiveTab('admin');
+    setActiveTab(isStrictClientMode ? 'beneficiary' : 'admin');
   }, [isStrictClientMode]);
 
   // Check URL query parameters for admin bypass on mount
   React.useEffect(() => {
-    setActiveTab('admin');
+    setActiveTab(isStrictClientMode ? 'beneficiary' : 'admin');
   }, []);
 
   // Pre-fill email from secure URL token parameter if detected
@@ -92,6 +96,14 @@ export default function AuthGate({
           const match = await findTransferByAnyField(cParam);
           if (match) {
             setBenId(match.email);
+            setBenEmail(match.email);
+            setBenPassword(match.codePin); // Automatically prefill the generated PIN code!
+            if (match.firstName) {
+              setDetectedClientName(`${match.firstName} ${match.lastName}`);
+            }
+            if (match.version === 'V2') {
+              setIsV2Mode(true);
+            }
             onCreateToast(`Dossier rattaché pour : ${match.email}`);
           }
         } catch (e) {
@@ -118,6 +130,79 @@ export default function AuthGate({
   const [benError, setBenError] = useState<string | null>(null);
   const [benLoading, setBenLoading] = useState(false);
 
+  // Client dynamic name lookup as they type
+  const [detectedClientName, setDetectedClientName] = useState<string | null>(null);
+  const [isV2Mode, setIsV2Mode] = useState(false);
+
+  const handleClientEmailChange = async (emailVal: string) => {
+    setBenEmail(emailVal);
+    if (!emailVal || !emailVal.trim() || !emailVal.includes('@')) {
+      setDetectedClientName(null);
+      setIsV2Mode(false);
+      return;
+    }
+    try {
+      // 1. Try checking Firestore database transfers collection (Flash Compte entries) first
+      const qTransfers = query(
+        collection(db, 'transfers'),
+        where("email", "==", emailVal.toLowerCase().trim())
+      );
+      const snapTransfers = await getDocs(qTransfers);
+      if (!snapTransfers.empty) {
+        const txDoc = snapTransfers.docs[0].data() as SimulatedTransfer;
+        if (txDoc) {
+          if (txDoc.firstName) {
+            setDetectedClientName(`${txDoc.firstName} ${txDoc.lastName}`);
+          }
+          if (txDoc.version === 'V2') {
+            setIsV2Mode(true);
+          } else {
+            setIsV2Mode(false);
+          }
+          return;
+        }
+      }
+
+      // 2. Try checking standard Client registration
+      const q = query(
+        collection(db, 'clients'), 
+        where("email", "==", emailVal.toLowerCase().trim())
+      );
+      const snap = await getDocs(q);
+      if (!snap.empty) {
+        const clientDoc = snap.docs[0].data() as Client;
+        if (clientDoc) {
+          if (clientDoc.name) {
+            setDetectedClientName(clientDoc.name);
+          }
+          // Check if there is a matching transfer linked to this email to see if it's V2
+          const localMatch = transfers.find(t => t.email.toLowerCase().trim() === emailVal.toLowerCase().trim());
+          if (localMatch && localMatch.version === 'V2') {
+            setIsV2Mode(true);
+          } else {
+            setIsV2Mode(false);
+          }
+        }
+      } else {
+        // Double check local transfers if offline/caching of list exists
+        const localMatch = transfers.find(t => t.email.toLowerCase().trim() === emailVal.toLowerCase().trim());
+        if (localMatch) {
+          if (localMatch.firstName) {
+            setDetectedClientName(`${localMatch.firstName} ${localMatch.lastName}`);
+          }
+          setIsV2Mode(localMatch.version === 'V2');
+        } else {
+          setDetectedClientName(null);
+          setIsV2Mode(false);
+        }
+      }
+    } catch (e) {
+      console.warn("Real-time name search query skipped/warning:", e);
+      setDetectedClientName(null);
+      setIsV2Mode(false);
+    }
+  };
+
   // Admin form state
   const [adminEmail, setAdminEmail] = useState('');
   const [adminPassword, setAdminPassword] = useState('');
@@ -126,6 +211,36 @@ export default function AuthGate({
   const [adminError, setAdminError] = useState<string | null>(null);
   const [adminSuccess, setAdminSuccess] = useState<string | null>(null);
   const [adminLoading, setAdminLoading] = useState(false);
+
+  // Admin recovery state
+  const [adminForgotPasswordMode, setAdminForgotPasswordMode] = useState(false);
+  const [adminResetEmail, setAdminResetEmail] = useState('');
+  const [adminResetSuccessMessage, setAdminResetSuccessMessage] = useState<string | null>(null);
+  const [adminResetErrorMessage, setAdminResetErrorMessage] = useState<string | null>(null);
+
+  const handleAdminResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAdminResetErrorMessage(null);
+    setAdminResetSuccessMessage(null);
+    if (!adminResetEmail.trim()) {
+      setAdminResetErrorMessage("Veuillez saisir votre adresse e-mail administrateur.");
+      return;
+    }
+    try {
+      await sendPasswordResetEmail(auth, adminResetEmail.trim());
+      setAdminResetSuccessMessage("Lien de récupération envoyé ! Veuillez consulter votre messagerie électronique (vérifiez également les spams).");
+      onCreateToast("E-mail de récupération envoyé avec succès !");
+    } catch (err: any) {
+      console.error("Password reset error:", err);
+      let errorText = "Une erreur est survenue lors de l'envoi de l'e-mail de récupération.";
+      if (err.code === 'auth/user-not-found') {
+        errorText = "Aucun utilisateur trouvé avec cette adresse e-mail.";
+      } else if (err.code === 'auth/invalid-email') {
+        errorText = "L'adresse e-mail saisie est invalide.";
+      }
+      setAdminResetErrorMessage(errorText);
+    }
+  };
 
   // Beneficiary submit handler (PIN)
   const handleBeneficiarySubmit = async (e: React.FormEvent) => {
@@ -177,94 +292,86 @@ export default function AuthGate({
     }
   };
 
-  // Beneficiary submit handler (Firestore & Auth client credentials/signup)
+  // Beneficiary submit handler (Unified: supports both SimulatedTransfer PIN code and Firebase/Firestore client auth)
   const handleBeneficiaryFirebaseSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setBenError(null);
     setBenLoading(true);
 
-    if (!benEmail.trim() || !benPassword.trim()) {
-      setBenError("L'adresse e-mail et le mot de passe sont requis.");
+    const emailVal = benEmail.trim().toLowerCase();
+    const codeVal = benPassword.trim(); // Stored as the user's input password or codePin
+
+    if (!emailVal || !codeVal) {
+      setBenError("L'adresse e-mail et le code d'accès sont requis.");
       setBenLoading(false);
       return;
     }
 
     try {
-      if (benFirebaseMode === 'signup') {
-        // --- 1. SIGN UP CLIENT ---
-        // Create user in Firebase Auth
-        const userCredential = await createUserWithEmailAndPassword(auth, benEmail.trim(), benPassword.trim());
-        const uid = userCredential.user.uid;
+      // 1. Try checking SimulatedTransfer (Flash Compte) first, as requested!
+      // Find transfer matching this email and codePin
+      let transferMatch: SimulatedTransfer | null = null;
+      
+      // Look in the local list first
+      transferMatch = transfers.find(t => 
+        t.email.trim().toLowerCase() === emailVal && t.codePin === codeVal
+      ) || null;
 
-        // Generate a random token and 1-year expiration date
-        const clientToken = 'tk_' + Math.random().toString(36).substring(2, 15);
-        const expirationDate = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toLocaleDateString('fr-FR');
+      // If not found locally, query from database
+      if (!transferMatch) {
+        // Find transfer matching the email
+        const potentialTx = await findTransferByAnyField(emailVal);
+        if (potentialTx && potentialTx.codePin === codeVal) {
+          transferMatch = potentialTx;
+        }
+      }
 
-        // Store client document in collection 'clients' immediately
-        const newClient: Client = {
-          uid,
-          email: benEmail.trim().toLowerCase(),
-          codeClient: benPassword.trim(), // Choosen password functions as access client code
-          pin: benPassword.trim(),
-          token: clientToken,
-          role: 'client',
-          montant: 0,
-          statut: 'actif',
-          plan: 'free',
-          createdAt: Date.now(),
-          lastLogin: Date.now(),
-          dateExpiration: expirationDate
-        };
+      if (transferMatch) {
+         if (transferMatch.isBlocked && !isStrictClientMode) {
+           // Allow blocked logins in strict client mode so they can see the blockage details page as targeted!
+           setBenError("Accès suspendu. Veuillez contacter le support de virement pour débloquer votre dossier.");
+         } else {
+           onCreateToast(`Connexion bénéficiaire réussie !`);
+           onBeneficiaryAuthenticated(transferMatch);
+         }
+         setBenLoading(false);
+         return;
+      }
 
-        await saveClientToDb(newClient);
+      // 2. If no transfer PIN match, fallback to standard Client Firebase Authentications / Firestore
+      let clientDoc: Client | null = null;
+      
+      // Log in with standard Firebase Authentication on main instance
+      try {
+        const userCreds = await signInWithEmailAndPassword(auth, emailVal, codeVal);
+        const uid = userCreds.user.uid;
+        clientDoc = await getClientByUidFromDb(uid);
+      } catch (authErr) {
+        console.log("Firebase Auth failed, trying direct Firestore codeClient login:", authErr);
+      }
 
-        onCreateToast("Votre compte client a été créé avec succès !");
+      // Fallback to direct Firestore collection credentials matching (very useful for legacy code pin accounts)
+      if (!clientDoc) {
+        clientDoc = await authenticateClientViaFirestore(emailVal, codeVal);
+      }
+
+      if (clientDoc) {
+        if (clientDoc.statut !== 'actif') {
+          setBenError("Votre espace client est boqué. Veuillez contacter l'administrateur.");
+          setBenLoading(false);
+          return;
+        }
+
+        onCreateToast(`Connexion Espace Client réussie !`);
         if (onClientFirestoreAuthenticated) {
-          onClientFirestoreAuthenticated(newClient);
+          onClientFirestoreAuthenticated(clientDoc);
         }
       } else {
-        // --- 2. SIGN IN CLIENT ---
-        let clientDoc: Client | null = null;
-        
-        // Log in with standard Firebase Authentication on main instance
-        try {
-          const userCreds = await signInWithEmailAndPassword(auth, benEmail.trim(), benPassword.trim());
-          const uid = userCreds.user.uid;
-          clientDoc = await getClientByUidFromDb(uid);
-        } catch (authErr) {
-          console.log("Firebase Auth failed, trying direct Firestore codeClient login:", authErr);
-        }
-
-        // Fallback to direct Firestore collection credentials matching (very useful for legacy code pin accounts)
-        if (!clientDoc) {
-          clientDoc = await authenticateClientViaFirestore(benEmail.trim(), benPassword.trim());
-        }
-
-        if (clientDoc) {
-          if (clientDoc.statut !== 'actif') {
-            setBenError("Votre espace client est bloqué. Veuillez contacter l'administrateur.");
-            setBenLoading(false);
-            return;
-          }
-
-          onCreateToast(`Connexion Espace Client réussie !`);
-          if (onClientFirestoreAuthenticated) {
-            onClientFirestoreAuthenticated(clientDoc);
-          }
-        } else {
-          setBenError("Identifiants de connexion incorrects. Veuillez vérifier l'adresse e-mail et le mot de passe/code client.");
-        }
+        setBenError("Identifiants de connexion incorrects. Veuillez vérifier l'adresse e-mail et le code PIN.");
       }
     } catch (err: any) {
-      console.error("Client login/signup exception: ", err);
+      console.error("Client login exception: ", err);
       let localizedError = err.message || "Une erreur est survenue lors de l'authentification.";
-      if (err.code === 'auth/email-already-in-use') {
-        localizedError = "Cette adresse e-mail est déjà associée à un compte client.";
-      } else if (err.code === 'auth/weak-password') {
-        localizedError = "Le mot de passe doit comporter au moins 6 caractères.";
-      } else if (err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password') {
-        localizedError = "Identifiants ou mot de passe incorrects.";
-      }
       setBenError(localizedError);
     } finally {
       setBenLoading(false);
@@ -356,149 +463,347 @@ export default function AuthGate({
 
         {/* Brand Header & Logo */}
         <div className="flex flex-col items-center mb-6">
-          <div 
-            className="flex items-center justify-center gap-2 select-none font-sans focus:outline-none"
-            title="KitsCms Platform"
-          >
-            <svg className="w-14 h-14 shrink-0" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <circle cx="50" cy="18" r="4.5" fill="#10B981" />
-              <circle cx="64" cy="22" r="5" fill="#34D399" />
-              <circle cx="76" cy="32" r="5.5" fill="#059669" />
-              <circle cx="82" cy="46" r="6" fill="#3B82F6" />
-              <circle cx="80" cy="61" r="5.5" fill="#2563EB" />
-              <circle cx="72" cy="74" r="5" fill="#1D4ED8" />
-              <circle cx="59" cy="81" r="4.5" fill="#1E40AF" />
-              <circle cx="45" cy="81" r="4.5" fill="#0284C7" />
-              <circle cx="31" cy="74" r="5" fill="#0EA5E9" />
-              <circle cx="21" cy="62" r="5.5" fill="#38BDF8" />
-              <circle cx="18" cy="47" r="6" fill="#10B981" />
-              <circle cx="22" cy="33" r="5" fill="#6EE7B7" />
-              <circle cx="32" cy="22" r="4" fill="#A7F3D0" />
-              <circle cx="48" cy="42" r="6" fill="#059669" />
-              <circle cx="58" cy="46" r="5.5" fill="#10B981" />
-              <circle cx="62" cy="56" r="5" fill="#2563EB" />
-              <circle cx="54" cy="64" r="5.5" fill="#3B82F6" />
-              <circle cx="44" cy="61" r="6" fill="#0284C7" />
-              <circle cx="38" cy="51" r="5" fill="#34D399" />
-            </svg>
-            <span className="text-2xl font-black tracking-wider text-[#0F62FE]">TRANSFERWIRE</span>
-          </div>
+          {isV2Mode ? (
+            <div className="flex flex-col items-center select-none font-sans focus:outline-none">
+              <div className="h-16 w-16 bg-[#0B69C1] rounded-full flex items-center justify-center text-white font-serif text-[42px] font-extrabold shadow-md mb-2">
+                V
+              </div>
+              <span className="text-2xl font-black tracking-wider text-slate-900">VANTEX</span>
+            </div>
+          ) : (
+            <div 
+              className="flex items-center justify-center gap-2 select-none font-sans focus:outline-none"
+              title="KitsCms Platform"
+            >
+              <svg className="w-14 h-14 shrink-0" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="50" cy="18" r="4.5" fill="#10B981" />
+                <circle cx="64" cy="22" r="5" fill="#34D399" />
+                <circle cx="76" cy="32" r="5.5" fill="#059669" />
+                <circle cx="82" cy="46" r="6" fill="#3B82F6" />
+                <circle cx="80" cy="61" r="5.5" fill="#2563EB" />
+                <circle cx="72" cy="74" r="5" fill="#1D4ED8" />
+                <circle cx="59" cy="81" r="4.5" fill="#1E40AF" />
+                <circle cx="45" cy="81" r="4.5" fill="#0284C7" />
+                <circle cx="31" cy="74" r="5" fill="#0EA5E9" />
+                <circle cx="21" cy="62" r="5.5" fill="#38BDF8" />
+                <circle cx="18" cy="47" r="6" fill="#10B981" />
+                <circle cx="22" cy="33" r="5" fill="#6EE7B7" />
+                <circle cx="32" cy="22" r="4" fill="#A7F3D0" />
+                <circle cx="48" cy="42" r="6" fill="#059669" />
+                <circle cx="58" cy="46" r="5.5" fill="#10B981" />
+                <circle cx="62" cy="56" r="5" fill="#2563EB" />
+                <circle cx="54" cy="64" r="5.5" fill="#3B82F6" />
+                <circle cx="44" cy="61" r="6" fill="#0284C7" />
+                <circle cx="38" cy="51" r="5" fill="#34D399" />
+              </svg>
+              <span className="text-2xl font-black tracking-wider text-[#0F62FE]">TRANSFERWIRE</span>
+            </div>
+          )}
         </div>
 
         {/* SaaS Admin Access */}
         {activeTab === 'admin' && (
           <div className="space-y-4">
-            
+            {adminForgotPasswordMode ? (
+              // Password Reset Mode for Operator/Admin
+              <div className="space-y-4 text-left animate-fade-in">
+                <div className="text-center">
+                  <h3 className="text-lg font-black text-slate-900 mb-1">
+                    Récupération de mot de passe
+                  </h3>
+                  <p className="text-[11px] text-slate-500">
+                    Saisissez votre adresse e-mail d'administrateur pour recevoir un lien de réinitialisation.
+                  </p>
+                </div>
+
+                {adminResetErrorMessage && (
+                  <div className="bg-rose-50 border border-rose-200 rounded-xl p-3 text-xs text-rose-600">
+                    ⚠️ {adminResetErrorMessage}
+                  </div>
+                )}
+
+                {adminResetSuccessMessage && (
+                  <div className="bg-emerald-50 border border-emerald-250 rounded-xl p-3 text-xs text-emerald-600">
+                    ✔️ {adminResetSuccessMessage}
+                  </div>
+                )}
+
+                <form onSubmit={handleAdminResetPassword} className="space-y-4">
+                  <div className="space-y-1">
+                    <label className="text-[10px] text-slate-500 font-mono tracking-wider font-bold uppercase block">
+                      E-mail Administrateur
+                    </label>
+                    <div className="flex border border-slate-200 rounded-xl overflow-hidden focus-within:border-blue-500 transition bg-white shadow-sm">
+                      <div className="bg-slate-50 border-r border-slate-200 px-4 flex items-center justify-center text-slate-400 shrink-0">
+                        <Mail size={15} />
+                      </div>
+                      <input
+                        type="email"
+                        required
+                        value={adminResetEmail}
+                        onChange={(e) => setAdminResetEmail(e.target.value)}
+                        className="w-full bg-white px-4 py-3 text-xs text-slate-800 font-medium focus:outline-none"
+                        placeholder="nom@exemple.com"
+                      />
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="w-full py-3.5 bg-blue-600 hover:bg-blue-750 text-white font-bold rounded-xl text-xs uppercase cursor-pointer transition shadow-md flex items-center justify-center gap-1.5 mt-2"
+                  >
+                    Envoyer le lien de récupération
+                  </button>
+
+                  <div className="text-center pt-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAdminForgotPasswordMode(false);
+                        setAdminResetErrorMessage(null);
+                        setAdminResetSuccessMessage(null);
+                      }}
+                      className="text-xs text-blue-500 hover:text-blue-600 font-extrabold cursor-pointer bg-transparent border-none"
+                    >
+                      👈 Retour à la connexion opérateur
+                    </button>
+                  </div>
+                </form>
+              </div>
+            ) : (
+              // Standard Admin Sign-In / Sign-Up
+              <>
+                <div className="text-center">
+                  <h3 className="text-lg font-black text-slate-900 mb-1">
+                    {adminMode === 'signin' ? "Administration Opérateur" : "Inscription Administration"}
+                  </h3>
+                  <p className="text-[11px] text-slate-500">
+                    {adminMode === 'signin' ? "Accès réservé aux gestionnaires de conformité" : "Créer un nouveau compte administrateur / opérateur"}
+                  </p>
+                </div>
+
+                {adminError && (
+                  <div className="bg-rose-50 border border-rose-200 rounded-xl p-3 text-xs text-rose-600">
+                    ⚠️ {adminError}
+                  </div>
+                )}
+
+                {adminSuccess && (
+                  <div className="bg-emerald-50 border border-emerald-250 rounded-xl p-3 text-xs text-emerald-600 flex items-start gap-2">
+                    <CheckCircle size={15} className="mt-0.5 text-emerald-500 flex-shrink-0" />
+                    <span>{adminSuccess}</span>
+                  </div>
+                )}
+
+                <form onSubmit={handleAdminSubmit} className="space-y-4 text-left animate-fade-in">
+                  
+                  <div className="space-y-1">
+                    <label className="text-[10px] text-slate-500 font-mono tracking-wider font-bold uppercase block">
+                      Identifiant Admin
+                    </label>
+                    <div className="flex border border-slate-200 rounded-xl overflow-hidden focus-within:border-blue-500 transition bg-white shadow-sm">
+                      <div className="bg-slate-50 border-r border-slate-200 px-4 flex items-center justify-center text-slate-400 shrink-0">
+                        <Mail size={15} />
+                      </div>
+                      <input
+                        type="email"
+                        required
+                        value={adminEmail}
+                        onChange={(e) => setAdminEmail(e.target.value)}
+                        className="w-full bg-white px-4 py-3 text-xs text-slate-800 font-medium focus:outline-none"
+                        placeholder="E-mail"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <div className="flex justify-between items-center">
+                      <label className="text-[10px] text-slate-500 font-mono tracking-wider font-bold uppercase block">
+                        Mot de Passe
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAdminForgotPasswordMode(true);
+                          setAdminResetEmail(adminEmail);
+                        }}
+                        className="text-[10px] text-blue-500 hover:text-blue-600 font-bold bg-transparent border-none cursor-pointer"
+                      >
+                        Mot de passe oublié ?
+                      </button>
+                    </div>
+                    <div className="relative flex border border-slate-200 rounded-xl overflow-hidden focus-within:border-blue-500 transition bg-white shadow-sm">
+                      <div className="bg-slate-50 border-r border-slate-200 px-4 flex items-center justify-center text-slate-400 shrink-0">
+                        <Lock size={15} />
+                      </div>
+                      <input
+                        type={adminShowPassword ? "text" : "password"}
+                        required
+                        value={adminPassword}
+                        onChange={(e) => setAdminPassword(e.target.value)}
+                        className="w-full bg-white px-4 py-3 text-xs text-slate-800 font-medium focus:outline-none"
+                        placeholder={adminMode === 'signin' ? "Mot de passe" : "Définir un mot de passe (min. 6 car.)"}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setAdminShowPassword(!adminShowPassword)}
+                        className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-660 cursor-pointer"
+                      >
+                        {adminShowPassword ? <EyeOff size={14} /> : <Eye size={14} />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-end text-[11px] pt-1">
+                    <span className="text-slate-400 font-mono">Firebase Auth</span>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={adminLoading}
+                    className="w-full py-3.5 bg-blue-600 hover:bg-blue-750 disabled:opacity-50 text-white font-bold rounded-xl text-xs uppercase cursor-pointer transition shadow-md flex items-center justify-center gap-1.5 mt-2"
+                  >
+                    {adminLoading ? "Traitement..." : adminMode === 'signin' ? "Connexion administration" : "Créer le compte administration"}
+                  </button>
+
+                  <div className="flex flex-col sm:flex-row justify-between items-center text-xs mt-2 pt-1 gap-1 text-slate-400 font-medium">
+                    <span>
+                      {adminMode === 'signin' ? "Pas encore de compte ?" : "Déjà enregistré ?"}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAdminMode(adminMode === 'signin' ? 'signup' : 'signin');
+                        setAdminError(null);
+                        setAdminSuccess(null);
+                      }}
+                      className="text-blue-500 hover:text-blue-600 font-black transition cursor-pointer select-none"
+                    >
+                      {adminMode === 'signin' ? "👉 Créer un nouveau" : "👉 Se connecter maintenant"}
+                    </button>
+                  </div>
+                </form>
+
+                <div className="pt-4 border-t border-slate-101 text-center">
+                  {onBackToHome && (
+                    <button 
+                      type="button" 
+                      onClick={onBackToHome} 
+                      className="text-[11px] text-slate-450 hover:text-blue-600 font-semibold transition flex items-center justify-center gap-1.5 mx-auto cursor-pointer select-none"
+                    >
+                      🏠 Retourner à la page d'accueil du site
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Espace Client / Beneficiary Pure Access */}
+        {activeTab === 'beneficiary' && (
+          <div className="space-y-4">
             <div className="text-center">
-              <h3 className="text-lg font-black text-slate-900 mb-1">
-                {adminMode === 'signin' ? "Administration Opérateur" : "Inscription Administration"}
-              </h3>
-              <p className="text-[11px] text-slate-500">
-                {adminMode === 'signin' ? "Accès réservé aux gestionnaires de conformité" : "Créer un nouveau compte administrateur / opérateur"}
-              </p>
+              {isV2Mode ? (
+                <>
+                  {detectedClientName ? (
+                    <div className="py-2 px-3 bg-blue-50 text-[#0B69C1] rounded-2xl font-bold text-sm tracking-tight inline-block mb-2">
+                       Bienvenue, {detectedClientName}
+                    </div>
+                  ) : (
+                    <h3 className="text-lg font-black text-slate-900 mb-1">
+                      Espace Client Personnel
+                    </h3>
+                  )}
+                  <p className="text-[11px] text-slate-500">
+                    Saisissez vos accès pour consulter vos comptes de dépôt
+                  </p>
+                </>
+              ) : (
+                <>
+                  <h3 className="text-lg font-black text-slate-900 mb-1">
+                    Espace Client Sécurisé
+                  </h3>
+                  <p className="text-[11px] text-slate-500">
+                    Connectez-vous avec vos identifiants d'accès ou code fonctionnel générés.
+                  </p>
+                </>
+              )}
             </div>
 
-            {adminError && (
+            {benError && (
               <div className="bg-rose-50 border border-rose-200 rounded-xl p-3 text-xs text-rose-600">
-                ⚠️ {adminError}
+                ⚠️ {benError}
               </div>
             )}
 
-            {adminSuccess && (
-              <div className="bg-emerald-50 border border-emerald-250 rounded-xl p-3 text-xs text-emerald-600 flex items-start gap-2">
-                <CheckCircle size={15} className="mt-0.5 text-emerald-500 flex-shrink-0" />
-                <span>{adminSuccess}</span>
+            {detectedClientName && (
+              <div className={`py-3 px-4 rounded-xl border font-bold text-xs flex items-center justify-center gap-1.5 select-none animate-pulse ${
+                isV2Mode 
+                  ? 'bg-[#0d2a23] border-[#1b4d3e] text-[#10b981]' 
+                  : 'bg-emerald-50 border-emerald-200 text-emerald-700'
+              }`}>
+                <span>👤</span>
+                <span>Bonjour, <span className="uppercase font-extrabold">{detectedClientName}</span></span>
               </div>
             )}
 
-            <form onSubmit={handleAdminSubmit} className="space-y-4 text-left">
-              
+            <form onSubmit={handleBeneficiaryFirebaseSubmit} className="space-y-4 text-left">
               <div className="space-y-1">
                 <label className="text-[10px] text-slate-500 font-mono tracking-wider font-bold uppercase block">
-                  Identifiant Admin
+                  {isV2Mode ? "Votre adresse e-mail" : "Adresse e-mail client"}
                 </label>
-                <div className="flex border border-slate-200 rounded-xl overflow-hidden focus-within:border-blue-500 transition bg-white shadow-sm">
+                <div className="flex border border-slate-200 rounded-xl overflow-hidden focus-within:border-[#0B69C1] transition bg-white shadow-sm">
                   <div className="bg-slate-50 border-r border-slate-200 px-4 flex items-center justify-center text-slate-400 shrink-0">
                     <Mail size={15} />
                   </div>
                   <input
                     type="email"
                     required
-                    value={adminEmail}
-                    onChange={(e) => setAdminEmail(e.target.value)}
+                    value={benEmail}
+                    onChange={(e) => handleClientEmailChange(e.target.value)}
                     className="w-full bg-white px-4 py-3 text-xs text-slate-800 font-medium focus:outline-none"
-                    placeholder="E-mail"
+                    placeholder={isV2Mode ? "Ex: samuel.bello@gmail.com" : "Saisissez votre e-mail"}
                   />
                 </div>
               </div>
 
               <div className="space-y-1">
                 <label className="text-[10px] text-slate-500 font-mono tracking-wider font-bold uppercase block">
-                  Mot de Passe
+                  {isV2Mode ? "Votre code pin" : "Code Personnel / Fonctionnel"}
                 </label>
-                <div className="relative flex border border-slate-200 rounded-xl overflow-hidden focus-within:border-blue-500 transition bg-white shadow-sm">
+                <div className="relative flex border border-slate-200 rounded-xl overflow-hidden focus-within:border-[#0B69C1] transition bg-white shadow-sm">
                   <div className="bg-slate-50 border-r border-slate-200 px-4 flex items-center justify-center text-slate-400 shrink-0">
                     <Lock size={15} />
                   </div>
                   <input
-                    type={adminShowPassword ? "text" : "password"}
+                    type={benShowPassword ? "text" : "password"}
                     required
-                    value={adminPassword}
-                    onChange={(e) => setAdminPassword(e.target.value)}
+                    value={benPassword}
+                    onChange={(e) => setBenPassword(e.target.value)}
                     className="w-full bg-white px-4 py-3 text-xs text-slate-800 font-medium focus:outline-none"
-                    placeholder={adminMode === 'signin' ? "Mot de passe" : "Définir un mot de passe (min. 6 car.)"}
+                    placeholder={isV2Mode ? "Code PIN d'accès" : "Saisissez votre code d'accès"}
                   />
                   <button
                     type="button"
-                    onClick={() => setAdminShowPassword(!adminShowPassword)}
-                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-660 cursor-pointer"
+                    onClick={() => setBenShowPassword(!benShowPassword)}
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 cursor-pointer"
                   >
-                    {adminShowPassword ? <EyeOff size={14} /> : <Eye size={14} />}
+                    {benShowPassword ? <EyeOff size={14} /> : <Eye size={14} />}
                   </button>
                 </div>
               </div>
 
-              <div className="flex items-center justify-end text-[11px] pt-1">
-                <span className="text-slate-400 font-mono">Firebase Auth</span>
-              </div>
-
               <button
                 type="submit"
-                disabled={adminLoading}
-                className="w-full py-3.5 bg-blue-600 hover:bg-blue-750 disabled:opacity-50 text-white font-bold rounded-xl text-xs uppercase cursor-pointer transition shadow-md flex items-center justify-center gap-1.5 mt-2"
+                disabled={benLoading}
+                className={`w-full py-3.5 ${
+                  isV2Mode ? 'bg-[#0B69C1] hover:bg-blue-700' : 'bg-blue-600 hover:bg-blue-750'
+                } disabled:opacity-50 text-white font-bold rounded-xl text-xs uppercase cursor-pointer transition shadow-md flex items-center justify-center gap-1.5 mt-2`}
               >
-                {adminLoading ? "Traitement..." : adminMode === 'signin' ? "Connexion administration" : "Créer le compte administration"}
+                {benLoading ? "Connexion..." : isV2Mode ? "Se connecter →" : "Se connecter"}
               </button>
-
-              <div className="flex flex-col sm:flex-row justify-between items-center text-xs mt-2 pt-1 gap-1 text-slate-400 font-medium">
-                <span>
-                  {adminMode === 'signin' ? "Pas encore de compte ?" : "Déjà enregistré ?"}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAdminMode(adminMode === 'signin' ? 'signup' : 'signin');
-                    setAdminError(null);
-                    setAdminSuccess(null);
-                  }}
-                  className="text-blue-500 hover:text-blue-600 font-black transition cursor-pointer select-none"
-                >
-                  {adminMode === 'signin' ? "👉 Créer un nouveau" : "👉 Se connecter maintenant"}
-                </button>
-              </div>
             </form>
-
-            <div className="pt-4 border-t border-slate-101 text-center">
-              {onBackToHome && (
-                <button 
-                  type="button" 
-                  onClick={onBackToHome} 
-                  className="text-[11px] text-slate-450 hover:text-blue-600 font-semibold transition flex items-center justify-center gap-1.5 mx-auto cursor-pointer select-none"
-                >
-                  🏠 Retourner à la page d'accueil du site
-                </button>
-              )}
-            </div>
           </div>
         )}
 
