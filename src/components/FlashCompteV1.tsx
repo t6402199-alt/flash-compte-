@@ -67,114 +67,167 @@ export default function FlashCompteV1({
 
   const [emailAlert, setEmailAlert] = useState(true);
   const [smsAlert, setSmsAlert] = useState(false);
-
-  // Modal output state
   const [modalOpen, setModalOpen] = useState(false);
   const [createdTx, setCreatedTx] = useState<SimulatedTransfer | null>(null);
 
-  const handleSendCredentials = (createdTx: SimulatedTransfer) => {
-    // 1. Generate real mailto link
-    const subjectLine = encodeURIComponent("🔑 Vos identifiants de connexion TransferWire");
-    const bodyLine = encodeURIComponent(
-      `Bonjour ${createdTx.firstName} ${createdTx.lastName},\n\n` +
-      `Voici vos identifiants pour vous connecter à votre espace bancaire sécurisé TransferWire :\n\n` +
-      `Lien de connexion direct : ${createdTx.generatedUrl}\n` +
-      `Identifiant / E-mail : ${createdTx.email}\n` +
-      `Code PIN d'accès : ${createdTx.codePin}\n\n` +
-      `Conservez précieusement ces identifiants de sécurité pour valider vos opérations de compensation interbancaire.\n\n` +
-      `Cordialement,\n` +
-      `Le Service de la Conformité TransferWire`
-    );
+  // Dispatch choices state
+  const [dispatchTarget, setDispatchTarget] = useState<'credentials' | 'unlock' | null>(null);
+  const [apiSimStep, setApiSimStep] = useState<string[]>([]);
+  const [apiSimRunning, setApiSimRunning] = useState(false);
+  const [apiSimSuccess, setApiSimSuccess] = useState(false);
+
+  const handleActionOpenUrl = (url: string, toastMsg: string) => {
+    window.open(url, '_blank');
+    onCreateToast(toastMsg);
     
-    // We send via window.open mailto
-    window.open(`mailto:${createdTx.email}?subject=${subjectLine}&body=${bodyLine}`, '_self');
-
-    // 2. Mock Simulated Inbox persist inside Firestore
-    const brandNewEmail: SimulatedEmail = {
-      id: `mail-${Math.floor(10000 + Math.random() * 90000)}`,
-      sender: 'conformite@transferwireworld.com',
-      recipient: createdTx.email,
-      subject: `🔑 Vos identifiants de connexion TransferWire`,
-      body: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e1e8ed; border-radius: 12px; overflow: hidden; background-color: #ffffff;">
-          <div style="background-color: #0F62FE; color: #ffffff; padding: 24px; text-align: center;">
-            <h1 style="margin: 0; font-size: 22px; font-weight: bold;">TRANSFERWIRE SECURE ACCESS</h1>
-          </div>
-          <div style="padding: 24px; font-size: 14px; line-height: 1.6; color: #334155;">
-            <p>Bonjour <strong>${createdTx.firstName} ${createdTx.lastName}</strong>,</p>
-            <p>Vos accès sécurisés ont été configurés avec l'habilitation de conformité pour la consultation interbancaire.</p>
-            
-            <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px; margin: 15px 0;">
-              <p style="margin: 0 0 8px 0;"><strong>Lien de connexion direct :</strong><br/><a href="${createdTx.generatedUrl}" target="_blank" style="color: #0F62FE; font-weight: bold; word-break: break-all;">${createdTx.generatedUrl}</a></p>
-              <p style="margin: 0 0 8px 0;"><strong>E-mail :</strong> <code>${createdTx.email}</code></p>
-              <p style="margin: 0;"><strong>Code PIN d'accès :</strong> <strong style="color: #0F62FE; font-size: 16px;">${createdTx.codePin}</strong></p>
+    // Also save in-app simulated email so that when they open the page, the user can indeed see they received it!
+    if (createdTx) {
+      const isCredentials = dispatchTarget === 'credentials';
+      const brandNewEmail: SimulatedEmail = {
+        id: `mail-${Math.floor(10000 + Math.random() * 90000)}`,
+        sender: 'conformite@transferwireworld.com',
+        recipient: createdTx.email,
+        subject: isCredentials ? `🔑 Vos identifiants de connexion TransferWire` : `⚠️ Rapprochement Règlementaire : Code de déblocage`,
+        body: isCredentials ? `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e1e8ed; border-radius: 12px; overflow: hidden; background-color: #ffffff;">
+            <div style="background-color: #0F62FE; color: #ffffff; padding: 24px; text-align: center;">
+              <h1 style="margin: 0; font-size: 22px; font-weight: bold;">TRANSFERWIRE SECURE ACCESS</h1>
             </div>
-            
-            <p style="font-size: 12px; color: #64748b; margin-top: 20px;">
-              🛡️ Cet e-mail est confidentiel. Ne partagez jamais vos identifiants ou votre code de sécurité avec des tiers.
-            </p>
+            <div style="padding: 24px; font-size: 14px; line-height: 1.6; color: #334155;">
+              <p>Bonjour <strong>${createdTx.firstName} ${createdTx.lastName}</strong>,</p>
+              <p>Vos accès sécurisés ont été configurés avec l'habilitation de conformité pour la consultation interbancaire.</p>
+              <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px; margin: 15px 0;">
+                <p style="margin: 0 0 8px 0;"><strong>Lien de connexion direct :</strong><br/><a href="${createdTx.generatedUrl}" target="_blank" style="color: #0F62FE; font-weight: bold; word-break: break-all;">${createdTx.generatedUrl}</a></p>
+                <p style="margin: 0 0 8px 0;"><strong>E-mail :</strong> <code>${createdTx.email}</code></p>
+                <p style="margin: 0;"><strong>Code PIN d'accès :</strong> <strong style="color: #0F62FE; font-size: 16px;">${createdTx.codePin}</strong></p>
+              </div>
+              <p style="font-size: 12px; color: #64748b; margin-top: 20px;">
+                🛡️ Cet e-mail est confidentiel. Ne partagez jamais vos identifiants ou votre code de sécurité avec des tiers.
+              </p>
+            </div>
           </div>
-        </div>
-      `,
-      timestamp: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
-      status: 'SUCCESS'
-    };
+        ` : `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #fee2e2; border-radius: 12px; overflow: hidden; background-color: #ffffff;">
+            <div style="background-color: #b91c1c; color: #ffffff; padding: 24px; text-align: center;">
+              <h1 style="margin: 0; font-size: 22px; font-weight: bold;">CONFORMITÉ INTERBANCAIRE</h1>
+            </div>
+            <div style="padding: 24px; font-size: 14px; line-height: 1.6; color: #334155;">
+              <p>Bonjour <strong>${createdTx.firstName} ${createdTx.lastName}</strong>,</p>
+              <p>Dans le cadre des contrôles réglementaires BCEAO/SWIFT, votre virement est consigné à <strong>${createdTx.stopPercentage}%</strong>.</p>
+              <div style="background-color: #fef2f2; border: 1px solid #fee2e2; border-radius: 8px; padding: 15px; margin: 15px 0; text-align: center;">
+                <p style="margin: 0 0 6px 0; font-size: 12px; color: #991b1b; font-weight: bold; uppercase;">Code de déblocage de sécurité (OTP) :</p>
+                <strong style="color: #b91c1c; font-size: 24px; letter-spacing: 2px;">${createdTx.otpCode || 'NON DEFINI'}</strong>
+              </div>
+              <p>Renseignez ce code d'accréditation sur l'interface sécurisée de votre espace personnel pour libérer les fonds en transit réglementaire.</p>
+            </div>
+          </div>
+        `,
+        timestamp: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+        status: 'SUCCESS'
+      };
+      const currentEmails = createdTx.emails || [];
+      createdTx.emails = [brandNewEmail, ...currentEmails];
+      saveTransferToDb(createdTx);
+    }
+  };
 
-    const currentEmails = createdTx.emails || [];
-    const updated = [brandNewEmail, ...currentEmails];
-    createdTx.emails = updated;
-    saveTransferToDb(createdTx);
-    onCreateToast("Identifiants envoyés par email et enregistrés dans la boîte de simulation !");
+  const startApiSimulation = (tx: SimulatedTransfer, type: 'credentials' | 'unlock') => {
+    if (apiSimRunning) return;
+    setApiSimRunning(true);
+    setApiSimSuccess(false);
+    setApiSimStep(["[1/4] Initialisation du pont de routage API..."]);
+
+    setTimeout(() => {
+      setApiSimStep(prev => [...prev, "[2/4] Connexion sécurisée aux serveurs Resend / SendGrid et passerelle SMS... ✅"]);
+    }, 800);
+
+    setTimeout(() => {
+      setApiSimStep(prev => [...prev, "[3/4] Requête d'envoi émise aux opérateurs Telecom et SMTP... ✅"]);
+    }, 1500);
+
+    setTimeout(() => {
+      setApiSimStep(prev => [...prev, "[4/4] Ping de détection et livraison réussie au destinataire ! ✅"]);
+      
+      // Persist simulated email inside client's simulated inbox automatically
+      if (type === 'credentials') {
+        const brandNewEmail: SimulatedEmail = {
+          id: `mail-${Math.floor(10000 + Math.random() * 90000)}`,
+          sender: 'conformite@transferwireworld.com',
+          recipient: tx.email,
+          subject: `🔑 Vos identifiants de connexion TransferWire`,
+          body: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e1e8ed; border-radius: 12px; overflow: hidden; background-color: #ffffff;">
+              <div style="background-color: #0F62FE; color: #ffffff; padding: 24px; text-align: center;">
+                <h1 style="margin: 0; font-size: 22px; font-weight: bold;">TRANSFERWIRE SECURE ACCESS</h1>
+              </div>
+              <div style="padding: 24px; font-size: 14px; line-height: 1.6; color: #334155;">
+                <p>Bonjour <strong>${tx.firstName} ${tx.lastName}</strong>,</p>
+                <p>Vos accès sécurisés ont été configurés avec l'habilitation de conformité pour la consultation interbancaire.</p>
+                <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px; margin: 15px 0;">
+                  <p style="margin: 0 0 8px 0;"><strong>Lien de connexion direct :</strong><br/><a href="${tx.generatedUrl}" target="_blank" style="color: #0F62FE; font-weight: bold; word-break: break-all;">${tx.generatedUrl}</a></p>
+                  <p style="margin: 0 0 8px 0;"><strong>E-mail :</strong> <code>${tx.email}</code></p>
+                  <p style="margin: 0;"><strong>Code PIN d'accès :</strong> <strong style="color: #0F62FE; font-size: 16px;">${tx.codePin}</strong></p>
+                </div>
+                <p style="font-size: 12px; color: #64748b; margin-top: 20px;">
+                  🛡️ Cet e-mail est confidentiel. Ne partagez jamais vos identifiants ou votre code de sécurité avec des tiers.
+                </p>
+              </div>
+            </div>
+          `,
+          timestamp: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+          status: 'SUCCESS'
+        };
+        const currentEmails = tx.emails || [];
+        tx.emails = [brandNewEmail, ...currentEmails];
+        saveTransferToDb(tx);
+      } else {
+        const brandNewEmail: SimulatedEmail = {
+          id: `mail-${Math.floor(10000 + Math.random() * 90000)}`,
+          sender: 'conformite@transferwireworld.com',
+          recipient: tx.email,
+          subject: `⚠️ Rapprochement Règlementaire : Code de déblocage`,
+          body: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #fee2e2; border-radius: 12px; overflow: hidden; background-color: #ffffff;">
+              <div style="background-color: #b91c1c; color: #ffffff; padding: 24px; text-align: center;">
+                <h1 style="margin: 0; font-size: 22px; font-weight: bold;">CONFORMITÉ INTERBANCAIRE</h1>
+              </div>
+              <div style="padding: 24px; font-size: 14px; line-height: 1.6; color: #334155;">
+                <p>Bonjour <strong>${tx.firstName} ${tx.lastName}</strong>,</p>
+                <p>Dans le cadre des contrôles réglementaires BCEAO/SWIFT, votre virement est consigné à <strong>${tx.stopPercentage}%</strong>.</p>
+                <div style="background-color: #fef2f2; border: 1px solid #fee2e2; border-radius: 8px; padding: 15px; margin: 15px 0; text-align: center;">
+                  <p style="margin: 0 0 6px 0; font-size: 12px; color: #991b1b; font-weight: bold; uppercase;">Code de déblocage de sécurité (OTP) :</p>
+                  <strong style="color: #b91c1c; font-size: 24px; letter-spacing: 2px;">${tx.otpCode || 'NON DEFINI'}</strong>
+                </div>
+                <p>Renseignez ce code d'accréditation sur l'interface sécurisée de votre espace personnel pour libérer les fonds en transit réglementaire.</p>
+              </div>
+            </div>
+          `,
+          timestamp: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+          status: 'SUCCESS'
+        };
+        const currentEmails = tx.emails || [];
+        tx.emails = [brandNewEmail, ...currentEmails];
+        saveTransferToDb(tx);
+      }
+
+      setApiSimRunning(false);
+      setApiSimSuccess(true);
+      onCreateToast("Routage API sécurisé simulé (Twilio & Resend API) complété ! Le client recevra ses identifiants.");
+    }, 2500);
+  };
+
+  const handleSendCredentials = (createdTx: SimulatedTransfer) => {
+    setDispatchTarget('credentials');
+    setApiSimSuccess(false);
+    setApiSimRunning(false);
+    setApiSimStep([]);
   };
 
   const handleSendUnlockCode = (createdTx: SimulatedTransfer) => {
-    // 1. Generate real mailto link
-    const subjectLine = encodeURIComponent("⚠️ Rapprochement Règlementaire : Code de déblocage");
-    const bodyLine = encodeURIComponent(
-      `Bonjour ${createdTx.firstName} ${createdTx.lastName},\n\n` +
-      `Votre virement national de compensation monétaire est bloqué à ${createdTx.stopPercentage}% de progression.\n` +
-      `Pour procéder à la libération et à l'accréditation définitive de vos fonds, veuillez introduire le code OTP ci-dessous :\n\n` +
-      `Code de déblocage réglementaire (OTP) : ${createdTx.otpCode || 'NON DEFINI'}\n\n` +
-      `Introduisez ce code sur votre espace bancaire sécurisé de consultation interbancaire pour lever immédiatement la consignation.\n\n` +
-      `Cordialement,\n` +
-      `La Direction de la Conformité TransferWire`
-    );
-
-    window.open(`mailto:${createdTx.email}?subject=${subjectLine}&body=${bodyLine}`, '_self');
-
-    // 2. Mock Simulated Inbox persist inside Firestore
-    const brandNewEmail: SimulatedEmail = {
-      id: `mail-${Math.floor(10000 + Math.random() * 90000)}`,
-      sender: 'conformite@transferwireworld.com',
-      recipient: createdTx.email,
-      subject: `⚠️ Rapprochement Règlementaire : Code de déblocage`,
-      body: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #fee2e2; border-radius: 12px; overflow: hidden; background-color: #ffffff;">
-          <div style="background-color: #b91c1c; color: #ffffff; padding: 24px; text-align: center;">
-            <h1 style="margin: 0; font-size: 22px; font-weight: bold;">CONFORMITÉ INTERBANCAIRE</h1>
-          </div>
-          <div style="padding: 24px; font-size: 14px; line-height: 1.6; color: #334155;">
-            <p>Bonjour <strong>${createdTx.firstName} ${createdTx.lastName}</strong>,</p>
-            <p>Dans le cadre des contrôles réglementaires BCEAO/SWIFT, votre virement est consigné à <strong>${createdTx.stopPercentage}%</strong>.</p>
-            
-            <div style="background-color: #fef2f2; border: 1px solid #fee2e2; border-radius: 8px; padding: 15px; margin: 15px 0; text-align: center;">
-              <p style="margin: 0 0 6px 0; font-size: 12px; color: #991b1b; font-weight: bold; uppercase;">Code de déblocage de sécurité (OTP) :</p>
-              <strong style="color: #b91c1c; font-size: 24px; letter-spacing: 2px;">${createdTx.otpCode || 'NON DEFINI'}</strong>
-            </div>
-            
-            <p>Renseignez ce code d'accréditation sur l'interface sécurisée de votre espace personnel pour libérer les fonds en transit réglementaire.</p>
-          </div>
-        </div>
-      `,
-      timestamp: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
-      status: 'SUCCESS'
-    };
-
-    const currentEmails = createdTx.emails || [];
-    const updated = [brandNewEmail, ...currentEmails];
-    createdTx.emails = updated;
-    saveTransferToDb(createdTx);
-    onCreateToast("Code de déblocage envoyé par email et enregistré dans la boîte de simulation !");
+    setDispatchTarget('unlock');
+    setApiSimSuccess(false);
+    setApiSimRunning(false);
+    setApiSimStep([]);
   };
 
   // FORM 2: UPDATE ACCESS
@@ -872,7 +925,13 @@ export default function FlashCompteV1({
             <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
               <h3 className="text-base font-black text-slate-900 font-sans">Détails de l'accès client</h3>
               <button
-                onClick={() => setModalOpen(false)}
+                onClick={() => {
+                  setModalOpen(false);
+                  setDispatchTarget(null);
+                  setApiSimStep([]);
+                  setApiSimRunning(false);
+                  setApiSimSuccess(false);
+                }}
                 className="p-1.5 hover:bg-slate-100 rounded-full text-slate-400 hover:text-slate-700 transition cursor-pointer"
               >
                 <X size={16} />
@@ -928,23 +987,171 @@ export default function FlashCompteV1({
               </div>
             </div>
 
-             {/* Email send action triggers with yellow and blue exactly as on the screenshots */}
-             <div className="grid grid-cols-2 gap-2 text-center text-[10px] sm:text-[11px] font-sans my-4">
-               <button
-                 type="button"
-                 onClick={() => handleSendCredentials(createdTx)}
-                 className="p-3 bg-blue-600 hover:bg-blue-700 text-white font-extrabold rounded-lg transition-all shadow-sm flex items-center justify-center text-center cursor-pointer leading-tight"
-               >
-                 Envoyer les identifiants de connexion au client par e-mail ✉
-               </button>
-               <button
-                 type="button"
-                 onClick={() => handleSendUnlockCode(createdTx)}
-                 className="p-3 bg-[#FCB316] hover:bg-[#E09A0A] text-slate-900 font-extrabold rounded-lg transition-all shadow-sm flex items-center justify-center text-center cursor-pointer leading-tight"
-               >
-                 Envoyer le code de déblocage du virement au client par e-mail ✉
-               </button>
-             </div>
+             {/* Multichannel send panel implementation */}
+             {!dispatchTarget ? (
+               <div className="grid grid-cols-2 gap-2 text-center text-[10px] sm:text-[11px] font-sans my-4">
+                 <button
+                   type="button"
+                   onClick={() => handleSendCredentials(createdTx)}
+                   className="p-3 bg-blue-600 hover:bg-blue-700 text-white font-extrabold rounded-xl transition-all shadow-md flex items-center justify-center text-center cursor-pointer leading-tight"
+                 >
+                   Envoyer les identifiants de connexion au client par e-mail ✉
+                 </button>
+                 <button
+                   type="button"
+                   onClick={() => handleSendUnlockCode(createdTx)}
+                   className="p-3 bg-[#FCB316] hover:bg-[#E09A0A] text-slate-900 font-extrabold rounded-xl transition-all shadow-md flex items-center justify-center text-center cursor-pointer leading-tight"
+                 >
+                   Envoyer le code de déblocage du virement au client par e-mail ✉
+                 </button>
+               </div>
+             ) : (
+               <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 my-4 font-sans space-y-3">
+                 <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+                   <span className="text-xs font-black text-slate-900 flex items-center gap-1.5">
+                     🚀 Canal d'expédition : <strong className="text-blue-600 uppercase">{dispatchTarget === 'credentials' ? 'Identifiants d\'accès' : 'Code de déblocage (OTP)'}</strong>
+                   </span>
+                   <button 
+                     onClick={() => {
+                       setDispatchTarget(null);
+                       setApiSimStep([]);
+                       setApiSimSuccess(false);
+                     }}
+                     className="text-[10px] font-bold text-slate-500 hover:text-slate-800 bg-white hover:bg-slate-100 px-2 py-1 rounded-lg border border-slate-200 transition cursor-pointer"
+                   >
+                     ← Retour
+                   </button>
+                 </div>
+
+                 {/* Formulating URLs inside React */}
+                 {(() => {
+                   const isCreds = dispatchTarget === 'credentials';
+                   const subjectText = isCreds 
+                     ? "🔑 Vos identifiants de connexion TransferWire" 
+                     : "⚠️ Rapprochement Règlementaire : Code de déblocage";
+
+                   const messageText = isCreds
+                     ? `Bonjour ${createdTx.firstName} ${createdTx.lastName},\n\n` +
+                       `Voici vos identifiants sécurisés pour vous connecter à votre espace bancaire TransferWire :\n\n` +
+                       `🔗 Lien de connexion : ${createdTx.generatedUrl}\n` +
+                       `📧 Identifiant : ${createdTx.email}\n` +
+                       `🔑 Code PIN d'accès : ${createdTx.codePin}\n\n` +
+                       `Conservez précieusement ces identifiants de sécurité.\n\n` +
+                       `Cordialement,\n` +
+                       `Le Service de la Conformité`
+                     : `Bonjour ${createdTx.firstName} ${createdTx.lastName},\n\n` +
+                       `Votre virement de compensation monétaire est bloqué à ${createdTx.stopPercentage}% de sa progression d'acheminement.\n` +
+                       `Pour procéder à la libération définitive de vos fonds, veuillez introduire le code OTP ci-dessous :\n\n` +
+                       `⚡ Code de déblocage (OTP) : ${createdTx.otpCode || 'NON DEFINI'}\n\n` +
+                       `Introduisez ce code d'accréditation réglementaire sur l'interface sécurisée de votre espace client.\n\n` +
+                       `Cordialement,\n` +
+                       `La Direction de la Conformité`;
+
+                   const mailtoUrl = `mailto:${createdTx.email}?subject=${encodeURIComponent(subjectText)}&body=${encodeURIComponent(messageText)}`;
+                   const cleanPhone = createdTx.phone ? createdTx.phone.replace(/[^0-9+]/g, '') : '';
+                   const whatsappUrl = `https://api.whatsapp.com/send?phone=${encodeURIComponent(cleanPhone)}&text=${encodeURIComponent(messageText)}`;
+                   
+                   const isIos = typeof navigator !== 'undefined' && /iPad|iPhone|iPod/.test(navigator.userAgent);
+                   const smsSeparator = isIos ? '&' : '?';
+                   const smsUrl = `sms:${cleanPhone}${smsSeparator}body=${encodeURIComponent(messageText)}`;
+
+                   return (
+                     <div className="space-y-3">
+                       <p className="text-[11px] text-slate-500 leading-normal">
+                         Sélectionnez un canal pour acheminer instantanément le contenu à <strong className="text-slate-800">{createdTx.firstName} {createdTx.lastName}</strong> ({createdTx.phone || createdTx.email}) :
+                       </p>
+
+                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                         {/* Option 1: Email Direct */}
+                         <button
+                           onClick={() => handleActionOpenUrl(mailtoUrl, "Modèle de mail ouvert avec succès dans votre application de messagerie !")}
+                           className="flex items-center gap-2 p-2.5 bg-white hover:bg-blue-50 border border-slate-200 hover:border-blue-300 rounded-xl transition text-left cursor-pointer group"
+                         >
+                           <div className="p-1.5 bg-blue-100 text-blue-600 rounded-lg group-hover:bg-blue-200 transition shrink-0">
+                             <Mail size={14} />
+                           </div>
+                           <div>
+                             <span className="block text-xs font-bold text-slate-900 leading-tight">E-mail (Mailto)</span>
+                             <span className="block text-[9.5px] text-slate-500 font-mono truncate max-w-[120px]">{createdTx.email}</span>
+                           </div>
+                         </button>
+
+                         {/* Option 2: WhatsApp Direct */}
+                         <button
+                           onClick={() => handleActionOpenUrl(whatsappUrl, "WhatsApp ouvert avec les identifiants pré-remplis pour envoi instantané !")}
+                           className="flex items-center gap-2 p-2.5 bg-white hover:bg-emerald-50 border border-slate-200 hover:border-emerald-300 rounded-xl transition text-left cursor-pointer group"
+                         >
+                           <div className="p-1.5 bg-emerald-100 text-emerald-600 rounded-lg group-hover:bg-emerald-200 transition shrink-0">
+                             <Smartphone size={14} />
+                           </div>
+                           <div>
+                             <span className="block text-xs font-bold text-slate-900 leading-tight">WhatsApp Direct</span>
+                             <span className="block text-[9.5px] text-slate-500 font-mono truncate max-w-[120px]">{createdTx.phone}</span>
+                           </div>
+                         </button>
+
+                         {/* Option 3: SMS Mobile */}
+                         <button
+                           onClick={() => handleActionOpenUrl(smsUrl, "Messagerie SMS système ouverte avec le message prêt à l'envoi !")}
+                           className="flex items-center gap-2 p-2.5 bg-white hover:bg-indigo-50 border border-slate-200 hover:border-indigo-300 rounded-xl transition text-left cursor-pointer group"
+                         >
+                           <div className="p-1.5 bg-indigo-100 text-indigo-600 rounded-lg group-hover:bg-indigo-200 transition shrink-0">
+                             <Smartphone size={14} />
+                           </div>
+                           <div>
+                             <span className="block text-xs font-bold text-slate-900 leading-tight">SMS Ligne Mobile</span>
+                             <span className="block text-[9.5px] text-slate-500 font-mono truncate max-w-[120px]">{createdTx.phone}</span>
+                           </div>
+                         </button>
+
+                         {/* Option 4: Background API simulation */}
+                         <button
+                           onClick={() => startApiSimulation(createdTx, dispatchTarget)}
+                           disabled={apiSimRunning}
+                           className={`flex items-center gap-2 p-2.5 border rounded-xl text-left transition shrink-0 ${
+                             apiSimRunning 
+                               ? 'bg-slate-100 border-slate-300 text-slate-400 cursor-not-allowed'
+                               : 'bg-indigo-900/10 border-indigo-200 hover:border-indigo-400 text-indigo-900 hover:bg-indigo-900/20 cursor-pointer'
+                           }`}
+                         >
+                           <div className={`p-1.5 rounded-lg shrink-0 ${apiSimRunning ? 'bg-slate-200 text-slate-400' : 'bg-indigo-200 text-indigo-700'}`}>
+                             <RefreshCw size={14} className={apiSimRunning ? 'animate-spin' : ''} />
+                           </div>
+                           <div>
+                             <span className="block text-xs font-extrabold leading-tight">Routage API Automatique</span>
+                             <span className="block text-[9.5px] font-sans font-semibold">Simuler Twilio & Resend ⚡</span>
+                           </div>
+                         </button>
+                       </div>
+
+                       {/* API Simulator Terminal view */}
+                       {(apiSimRunning || apiSimStep.length > 0) && (
+                         <div className="bg-slate-950 border border-slate-800 rounded-xl p-3 font-mono text-[10px] text-indigo-400 leading-normal space-y-1 block animate-scale-up">
+                           <div className="flex items-center justify-between text-slate-500 border-b border-slate-900 pb-1.5 mb-1.5 uppercase font-bold text-[8.5px]">
+                             <span>Terminal de routage API - Simulation PCI-DSS</span>
+                             <span className="animate-pulse flex items-center gap-1 text-indigo-400">● ACTIF</span>
+                           </div>
+                           {apiSimStep.map((step, idx) => (
+                             <div key={idx} className="block">{step}</div>
+                           ))}
+                           {apiSimRunning && (
+                             <div className="flex items-center gap-2 text-slate-500 italic mt-1 bg-slate-900/50 py-1 px-1.5 rounded">
+                               <RefreshCw size={10} className="animate-spin text-indigo-400 shrink-0" />
+                               <span>Opération réseau du serveur en cours...</span>
+                             </div>
+                           )}
+                           {apiSimSuccess && (
+                             <div className="text-emerald-400 font-extrabold mt-2 border-t border-emerald-950/50 pt-1.5 flex items-center gap-1 uppercase text-[9px]">
+                               <span>✔️ ROUTAGE TERMINÉ AVEC SUCCÈS. LIVRAISON OK.</span>
+                             </div>
+                           )}
+                         </div>
+                       )}
+                     </div>
+                   );
+                 })()}
+               </div>
+             )}
 
             {/* Client profile details card exactly as on screenshot */}
             <div className="border-t border-slate-100 pt-4 space-y-3 text-xs text-slate-655 font-sans">
