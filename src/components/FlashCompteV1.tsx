@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { SimulatedTransfer, TransferType, SimulatedEmail } from '../types';
 import { saveTransferToDb } from '../lib/firebase';
+import { NON_AFRICAN_COUNTRIES, LANGUAGES_LIST } from '../lib/constants';
 
 interface FlashCompteV1Props {
   onGenerateTransfer: (transfer: Omit<SimulatedTransfer, 'id' | 'createdAt' | 'generatedUrl' | 'isCompleted'>) => SimulatedTransfer;
@@ -470,17 +471,9 @@ export default function FlashCompteV1({
                       onChange={(e) => setCountry(e.target.value)}
                       className="w-full bg-slate-950 border border-slate-820 rounded-xl px-3.5 py-2.5 text-xs text-slate-300 focus:outline-none focus:border-blue-500 font-medium cursor-pointer"
                     >
-                      <option value="France (+33)">🇫🇷 France (+33)</option>
-                      <option value="Belgique (+32)">🇧🇪 Belgique (+32)</option>
-                      <option value="Suisse (+41)">🇨🇭 Suisse (+41)</option>
-                      <option value="Luxembourg (+352)">🇱🇺 Luxembourg (+352)</option>
-                      <option value="Allemagne (+49)">🇩🇪 Allemagne (+49)</option>
-                      <option value="Espagne (+34)">🇪🇸 Espagne (+34)</option>
-                      <option value="Italie (+39)">🇮🇹 Italie (+39)</option>
-                      <option value="Royaume-Uni (+44)">🇬🇧 Royaume-Uni (+44)</option>
-                      <option value="Portugal (+351)">🇵🇹 Portugal (+351)</option>
-                      <option value="Roumanie (+40)">🇷🇴 Roumanie (+40)</option>
-                      <option value="Hongrie (+36)">🇭🇺 Hongrie (+36)</option>
+                      {NON_AFRICAN_COUNTRIES.map((c) => (
+                        <option key={c.value} value={c.value}>{c.label}</option>
+                      ))}
                     </select>
                   </div>
                   <div>
@@ -515,17 +508,9 @@ export default function FlashCompteV1({
                       onChange={(e) => setLanguage(e.target.value)}
                       className="w-full bg-slate-950 border border-slate-820 rounded-xl px-3.5 py-2.5 text-xs text-slate-300 focus:outline-none focus:border-blue-500 font-medium cursor-pointer"
                     >
-                      <option value="Français">Français</option>
-                      <option value="English">English</option>
-                      <option value="Deutsch">Deutsch</option>
-                      <option value="Español">Español</option>
-                      <option value="Português">Português</option>
-                      <option value="Italiano">Italiano</option>
-                      <option value="Belgique (NL)">Nederlands (Belgique)</option>
-                      <option value="Română">Română</option>
-                      <option value="Magyar">Magyar</option>
-                      <option value="Polski">Polski</option>
-                      <option value="العربية">العربية (Arabe)</option>
+                      {LANGUAGES_LIST.map((l) => (
+                        <option key={l.value} value={l.value}>{l.label}</option>
+                      ))}
                     </select>
                   </div>
                 </div>

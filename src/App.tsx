@@ -1006,6 +1006,8 @@ export default function App() {
               contacts={contacts} 
               onSendSms={handleCampaignSend} 
               deductBalance={deductBalance} 
+              campaigns={campaigns}
+              transfers={transfers}
             />
           )}
 
@@ -1015,6 +1017,8 @@ export default function App() {
               contacts={contacts} 
               onSendEmail={handleCampaignSend} 
               deductBalance={deductBalance} 
+              campaigns={campaigns}
+              transfers={transfers}
             />
           )}
 

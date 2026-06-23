@@ -18,6 +18,10 @@ export interface CampaignLog {
   cost: number;
   status: 'Envoyé' | 'En attente' | 'Échoué';
   createdAt: string;
+  recipientEmailOrPhone?: string;
+  recipientCountry?: string;
+  subject?: string;
+  image?: string;
 }
 
 export interface PaymentTransaction {

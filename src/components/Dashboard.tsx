@@ -25,6 +25,7 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { CampaignLog, SimulatedTransfer, PaymentTransaction } from '../types';
+import VirtualPhoneManager from './VirtualPhoneManager';
 
 interface DashboardProps {
   balance: number;
@@ -767,38 +768,7 @@ export default function Dashboard({
 
       {/* 8. VIRTUAL NUMBERS WORKSPACE */}
       {activeModal === 'virtual-phone' && (
-        <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="w-full max-w-md bg-white rounded-3xl p-6 relative shadow-2xl border border-slate-100">
-            <h3 className="text-base font-black text-slate-900 mb-3 flex items-center gap-2">
-              🟢 Numéros Virtuels SMS OTP (Mode Simulation)
-            </h3>
-            <p className="text-xs text-slate-500 mb-4 leading-relaxed">
-              Pour réaliser des audits de flux d'OTP, voici des canaux d'interceptions d'essai actifs :
-            </p>
-            <div className="space-y-3">
-              <div className="flex justify-between items-center bg-slate-50 border p-3 rounded-xl text-xs font-medium">
-                <div>
-                  <span className="text-[10px] block text-slate-400">Côte d'Ivoire (Canal Moov)</span>
-                  <span className="font-mono text-slate-800 font-bold">+225 01 02 89 44 23</span>
-                </div>
-                <span className="bg-emerald-100 text-emerald-700 px-2.5 py-0.5 rounded text-[10px] font-bold">ECOUTE ACTIVE</span>
-              </div>
-              <div className="flex justify-between items-center bg-slate-50 border p-3 rounded-xl text-xs font-medium">
-                <div>
-                  <span className="text-[10px] block text-slate-400">Sénégal (Canal Wave S.A.)</span>
-                  <span className="font-mono text-slate-800 font-bold">+221 77 654 32 10</span>
-                </div>
-                <span className="bg-emerald-100 text-emerald-700 px-2.5 py-0.5 rounded text-[10px] font-bold">ECOUTE ACTIVE</span>
-              </div>
-            </div>
-            <button 
-              onClick={() => setActiveModal(null)}
-              className="mt-5 w-full py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold"
-            >
-              Retourner aux outils
-            </button>
-          </div>
-        </div>
+        <VirtualPhoneManager onClose={() => setActiveModal(null)} />
       )}
 
       {/* 9. EMAIL PRO PRIVÉ DETAILS */}
