@@ -207,8 +207,6 @@ export default function EmailCampaign({
   return await res.text();
 };
       
-      const isMailerliteConfigured = !!mailerliteApiKey;
-      let realSendError: string | null = null;
 
       // Parse sender email and name from senderMask
       // Example senderMask: "Alerte Sécurisée <support@flashconnect.net>"
@@ -242,12 +240,7 @@ export default function EmailCampaign({
             // Extract clean text (strip HTML tags)
             const plainText = emailBody.replace(/<[^>]*>/g, '');
             
-            const response = await fetch('https://connect.mailerlite.com/api/emails/transactional', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json',
-                'Authorization': `Bearer ${mailerliteApiKey}`
+          
               },
               body: JSON.stringify({
                 subject: subject,
