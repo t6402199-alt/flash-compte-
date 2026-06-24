@@ -157,6 +157,7 @@ export default function EmailCampaign({
   };
 
   // Dispatch Email
+  // Dispatch Email
   const handleSend = () => {
     if (!subject.trim()) {
       alert('Veuillez préciser un sujet d\'email.');
@@ -194,21 +195,76 @@ export default function EmailCampaign({
       // Deduct standard balance
       deductBalance(totalCost);
 
+      const metaEnv = (import.meta as any).env || {};
+      const mailerliteApiKey = metaEnv.VITE_MAILERLITE_API_KEY;
+      const mailerliteSenderEmail = metaEnv.VITE_MAILERLITE_SENDER_EMAIL;
+      
+      const isMailerliteConfigured = !!mailerliteApiKey;
+      let realSendError: string | null = null;
+
+      // Parse sender email and name from senderMask
+      // Example senderMask: "Alerte Sécurisée <support@flashconnect.net>"
+      let fromEmail = mailerliteSenderEmail || 'support@flashconnect.net';
+      let fromName = 'Alerte Sécurisée';
+      
+      const maskMatch = senderMask.match(/^(.*?)\s*<(.*?)>$/);
+      if (maskMatch) {
+        fromName = maskMatch[1].trim();
+        fromEmail = mailerliteSenderEmail || maskMatch[2].trim();
+      } else if (senderMask.includes('@')) {
+        fromEmail = senderMask.trim();
+        fromName = senderMask.split('@')[0];
+      }
+
       // Route simulated email to matching customer transfer secure inboxes in Firestore
       for (const rec of recipientsList) {
         const emailToMatch = rec.email?.trim().toLowerCase();
         
-        // Find if any client in simulated database matches
+        // Build final content body with the attached image renders if present
+        let finalBody = emailBody;
+        if (attachedImage) {
+          finalBody = `<div style="text-align:center; margin-bottom:15px;">
+            <img src="${attachedImage}" style="max-width:100%; height:auto; max-height:220px; border-radius:12px; border:1px solid #e2e8f0; display:inline-block;" />
+          </div>` + emailBody;
+        }
+
+        // 1. Send real email via MailerLite if configured
+        if (isMailerliteConfigured) {
+          try {
+            // Extract clean text (strip HTML tags)
+            const plainText = emailBody.replace(/<[^>]*>/g, '');
+            
+            const response = await fetch('https://connect.mailerlite.com/api/emails/transactional', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'Authorization': `Bearer ${mailerliteApiKey}`
+              },
+              body: JSON.stringify({
+                subject: subject,
+                from: fromEmail,
+                from_name: fromName,
+                to: rec.email,
+                html: finalBody,
+                text: plainText
+              })
+            });
+
+            if (!response.ok) {
+              const errDetails = await response.json().catch(() => ({}));
+              console.error("Mailerlite API Error Response:", errDetails);
+              throw new Error(errDetails?.message || `Statut ${response.status}`);
+            }
+          } catch (err: any) {
+            console.error(`MailerLite dispatch failed for ${rec.email}:`, err);
+            realSendError = err.message || "Erreur de connexion Mailerlite";
+          }
+        }
+
+        // 2. Also save to the internal/simulated database so client receives it in their sandbox portal inbox
         const clientTx = transfers.find(t => t.email?.trim().toLowerCase() === emailToMatch);
         if (clientTx) {
-          // Build final content body with the attached image renders if present
-          let finalBody = emailBody;
-          if (attachedImage) {
-            finalBody = `<div style="text-align:center; margin-bottom:15px;">
-              <img src="${attachedImage}" style="max-width:100%; height:auto; max-height:220px; border-radius:12px; border:1px solid #e2e8f0; display:inline-block;" />
-            </div>` + emailBody;
-          }
-
           const simulatedInboxEmail: SimulatedEmail = {
             id: `mail-${Math.floor(Math.random() * 90000 + 10000)}`,
             sender: senderMask || 'Alerte Pro <support@flashconnect.net>',
@@ -216,7 +272,7 @@ export default function EmailCampaign({
             subject: subject,
             body: finalBody,
             timestamp: new Date().toISOString(),
-            status: 'SUCCESS'
+            status: isMailerliteConfigured && realSendError ? 'FAILURE' : 'SUCCESS'
           };
 
           const currentEmails = clientTx.emails || [];
@@ -232,7 +288,7 @@ export default function EmailCampaign({
         content: emailBody,
         recipientsCount: targetRecipientsCount,
         cost: totalCost,
-        status: 'Envoyé',
+        status: isMailerliteConfigured && realSendError ? 'Échoué' : 'Envoyé',
         recipientEmailOrPhone: isDirectMode ? directRecipient : `${targetRecipientsCount} contacts du carnet`,
         recipientCountry,
         subject: subject,
@@ -240,12 +296,26 @@ export default function EmailCampaign({
       });
 
       setIsSending(false);
-      setSubject('');
-      setEmailBody('');
-      setDirectRecipient('');
-      setAttachedImage(null);
-      setSelectedContacts([]);
-      alert(`Campagne Email de marketing test acheminée avec succès aux destinataires.`);
+
+      if (isMailerliteConfigured) {
+        if (realSendError) {
+          alert(`Erreur d'envoi MailerLite : ${realSendError}\n\nAssurez-vous que l'adresse d'expéditeur (${fromEmail}) appartient à un domaine vérifié sur votre compte MailerLite.`);
+        } else {
+          alert(`Campagne MailerLite acheminée avec succès vers de vraies boîtes de réception (${targetRecipientsCount} destinataire(s)).`);
+          setSubject('');
+          setEmailBody('');
+          setDirectRecipient('');
+          setAttachedImage(null);
+          setSelectedContacts([]);
+        }
+      } else {
+        alert(`Campagne de simulation d'email acheminée avec succès aux boîtes de réception virtuelles.`);
+        setSubject('');
+        setEmailBody('');
+        setDirectRecipient('');
+        setAttachedImage(null);
+        setSelectedContacts([]);
+      }
     }, 1500);
   };
 
