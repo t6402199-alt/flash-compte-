@@ -38,7 +38,25 @@ async function startServer() {
 
       console.log(`Sending real email via MailerLite to: ${to} from: ${finalFromEmail}`);
 
-      const response = await fetch("https://connect.mailerlite.com/api/emails/transactional", {
+      const response = await fetch("https://connect.mailerlite.com/api/email_messages", {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+    "Accept": "application/json",
+    "Authorization": `Bearer ${apiKey}`
+  },
+  body: JSON.stringify({
+    subject: subject,
+    from: {
+      email: finalFromEmail,
+      name: fromName || "Alerte Sécurisée"
+    },
+    to: [
+      { email: to }
+    ],
+    body: html
+  })
+});
         method: "POST",
         headers: {
           "Content-Type": "application/json",
