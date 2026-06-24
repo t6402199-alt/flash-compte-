@@ -195,9 +195,17 @@ export default function EmailCampaign({
       // Deduct standard balance
       deductBalance(totalCost);
 
-      const metaEnv = (import.meta as any).env || {};
-      const mailerliteApiKey = metaEnv.VITE_MAILERLITE_API_KEY;
-      const mailerliteSenderEmail = metaEnv.VITE_MAILERLITE_SENDER_EMAIL;
+      const sendCampaign = async (data: any) => {
+  const res = await fetch("https://TON-WORKER.workers.dev/send-campaign", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(data)
+  });
+
+  return await res.text();
+};
       
       const isMailerliteConfigured = !!mailerliteApiKey;
       let realSendError: string | null = null;
